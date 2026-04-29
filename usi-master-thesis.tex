@@ -90,7 +90,19 @@ It consists of 164 hand-crafted Python problems, each defined by a function sign
 Solutions are evaluated via execution against unit tests. Its companion, MBPP (\citet{austin2021programsynthesislargelanguage}), is a crowdsourced collection of 974 mostly basic Python programming challenges, where each problem is accompanied by a natural-language description and three test cases. 
 Despite their popularity — virtually all model announcements reporting code capability cite at least one of them — both benchmarks suffer from well-documented limitations: they are narrowly Python-centric, contain predominantly algorithmic and basic programming problems (96.9\% and 89.5\% of their content, respectively), and provide limited test coverage that makes evaluation scores statistically unstable.
 
-\section{A very very long section, titled ``The third section'', with a rather  short text alternative (third)}
+\subsection{Extended and Specialized Benchmarks}
+To overcome the limitations of HumanEval and MBPP, the research community has proposed a range of more comprehensive and challenging benchmarks.\\
+NaturalCodeBench (NCB) (\citet{zhang2024naturalcodebenchexaminingcodingperformance}) introduces 402 problems drawn from real coding online services across six domains — software engineering, data science, algorithms, systems administration, AI systems, and front-end development. 
+Unlike HumanEval and MBPP, NCB features multi-file format handling and is evaluated in an executable Docker environment, providing a more realistic assessment setting. 
+Notably, a performance mismatch study showed that many models ranked highly on HumanEval perform substantially worse on NCB, suggesting overfitting to the former.\\
+DSCodeBench (\citet{ouyang2025dscodebenchrealisticbenchmarkdata}) targets the data science domain specifically, with 1,000 problems sourced from real GitHub repositories and covering ten popular Python libraries (NumPy, Pandas, SciPy, Scikit-learn, TensorFlow, PyTorch, Matplotlib, Seaborn, Keras, and LightGBM). 
+Problems feature solution code averaging 22.5 lines and rich test suites averaging 200 cases each, providing significantly stronger evaluation than prior data science benchmarks such as DS-1000.
+Other notable specialized benchmarks include: BigCodeBench (\citet{zhuo2025bigcodebenchbenchmarkingcodegeneration}), which targets diverse function calls across 62 libraries; SWE-Bench (\citet{jimenez2024swebenchlanguagemodelsresolve}), which evaluates practical software engineering by asking models to fix real GitHub issues; EditBench (\citet{chi2025editbenchevaluatingllmabilities}), which assesses instructed code editing over 540 real-world problems; GitChameleon 2.0 (\citet{misra2025gitchameleon20evaluatingai}), which evaluates version-conditioned code generation across Python library updates; and LiveCodeBench, which aggregates problems from competitive programming platforms to ensure freshness. 
+For multi-language evaluation, benchmarks such as HumanEval-X, MultiPL-E, and XLCoST extend the scope beyond Python to C++, Java, JavaScript, and many other languages.\\
+A comprehensive survey (\citet{koohestani2025benchmarkingaimodelssoftware}) catalogues hundreds of code benchmarks organized along multiple dimensions including task type (generation, summarization, translation, repair, editing), programming language, and evaluation protocol.\\
+This taxonomy reveals that while the field has made significant strides in benchmark diversity, several recurring issues — shallow test coverage, limited language support, and proximity to training data — continue to undermine the reliability of evaluations.
+
+\section{Machine Unlearning Techniques for LLMs}
 
 \appendix %optional, use only if you have an appendix
 

@@ -1,8 +1,10 @@
 \documentclass[mscthesis]{usiinfthesis}
 \usepackage{lipsum}
 \usepackage{float}
-
+\usepackage{booktabs}
+\usepackage{tcolorbox}
 \usepackage{listings}
+\usepackage{adjustbox}
 \lstset{
     language=Python,
     basicstyle=\ttfamily,
@@ -10,11 +12,17 @@
     showstringspaces=false
 }
 
-\lstdefinelanguage{algebra}
-{morekeywords={import,sort,constructors,observers,transformers,axioms,if,
-else,end},
-sensitive=false,
-morecomment=[l]{//s},
+\lstdefinestyle{pythonstyle}{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,  
+    keywordstyle=\color{blue}\bfseries,
+    stringstyle=\color{orange},
+    commentstyle=\color{gray}\itshape,
+    showstringspaces=false,
+    breaklines=true,
+    frame=none,
+    aboveskip=2pt,
+    belowskip=2pt
 }
 
 
@@ -63,7 +71,18 @@ The first section describes how large language models are evaluated on coding ta
 A benchmark is a standardized collection of tasks — typically pairs of problem specifications and reference solutions or automated test suites — that allows the research community to compare the coding competence of different models under controlled, reproducible conditions. In code generation, a benchmark generally consists of a prompt (a natural-language description or partial code stub), an expected output (a function or program), and one or more test cases acting as an oracle for functional correctness. The evaluation score is computed by running model-generated code against these test cases.\\
 
 The standard evaluation pipeline proceeds as follows. The model receives a problem prompt — which may include a function signature, a docstring, and optional usage examples:
-\begin{lstlisting}
+\begin{figure}[H]
+	\centering
+	\begin{tcolorbox}[
+		colback=gray!6,
+		colframe=gray!50,
+		arc=3pt,
+		boxrule=0.5pt,
+		title={\small\textbf{Problem Prompt}},
+		fonttitle=\bfseries,
+		left=6pt, right=6pt, top=4pt, bottom=4pt
+	]
+\begin{lstlisting}[style=pythonstyle]
 	def is_palindrome(s: str) -> bool:
 		""" Return True if the given string s is a palindrome,
 		i.e., it reads the same forwards and backwards.
@@ -72,20 +91,50 @@ The standard evaluation pipeline proceeds as follows. The model receives a probl
 		True
 		"""
 \end{lstlisting}
+	\end{tcolorbox}
+\end{figure}
+
 It is asked to produce a complete implementation:
-\begin{lstlisting}
+\begin{figure}[H]
+	\centering
+	\begin{tcolorbox}[
+		colback=gray!6,
+		colframe=gray!50,
+		arc=3pt,
+		boxrule=0.5pt,
+		title={\small\textbf{Generated Code}},
+		fonttitle=\bfseries,
+		left=6pt, right=6pt, top=4pt, bottom=4pt
+	]
+\begin{lstlisting}[style=pythonstyle]
 	s = s.lower()
 	return s == s[::-1]
 \end{lstlisting}
+\end{tcolorbox}
+\end{figure}
 
 The generated code is then executed in a sandboxed environment against a predefined set of test cases. A solution is marked correct if all tests pass:
-\begin{lstlisting}
+\begin{figure}[H]
+	\centering
+	\begin{tcolorbox}[
+		colback=gray!6,
+		colframe=gray!50,
+		arc=3pt,
+		boxrule=0.5pt,
+		title={\small\textbf{Generated Code}},
+		fonttitle=\bfseries,
+		left=6pt, right=6pt, top=4pt, bottom=4pt
+	]
+\begin{lstlisting}[style=pythonstyle]
 	assert is_palindrome("racecar") == True
 	assert is_palindrome("hello") == False
 	assert is_palindrome("Madam") == True
 	assert is_palindrome("") == True
 	assert is_palindrome("A") == True
 \end{lstlisting}
+\end{tcolorbox}
+\end{figure}
+
 
 The primary metric for measuring functional correctness in this setting is $pass@k$. \\
 For each problem in the benchmark, the model generates $k$ independent code samples; the problem is considered solved if at least one sample passes all test cases. The final score is the fraction of benchmark problems satisfying this condition. 
@@ -171,6 +220,169 @@ Turning to unlearning applied specifically to code language models, \citet{chu20
 Several methods have been proposed to detect whether a model has been trained on a given benchmark. \citet{shi2024detectingpretrainingdatalarge} propose a Min-K\% Prob method that exploits the observation that a model assigns higher minimum token probabilities to memorized text than to novel text. \citet{zawalski2025detectingdatacontaminationllms} show that a model's ability to complete partially revealed benchmark problems — using only a few in-context examples as cues — serves as evidence of prior exposure. \citet{stoehr2024localizingparagraphmemorizationlanguage} further show that memorization of multi-sentence passages can be traced to specific, localized regions of the model via activation analysis, providing mechanistic evidence for the viability of targeted unlearning.
 \par\vspace{1em}
 Despite these advances in detection, removal of detected contamination remains an open problem. Filtering training corpora is error-prone and incomplete; retraining is expensive; and alternative benchmark creation is a race that will eventually be lost as models train on ever-larger internet scrapes. These limitations collectively motivate the approach explored in this thesis: rather than preventing contamination upstream, we aim to neutralize it downstream by identifying and zeroing out the model neurons responsible for storing benchmark-specific knowledge, thereby restoring the fairness of benchmark-based evaluation without the cost of retraining.
+
+
+\chapter{Design}
+This chapter describes the end-to-end design of our approach to benchmark unlearning for fair code LLM evaluation. The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to neutralize them through targeted weight ablation — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
+
+\section{Model Architecture and Setup}
+All experiments are conducted using the Qwen2.5-Coder family of models. Specifically, we use Qwen2.5-Coder-1.5B as the base model — a decoder-only transformer pre-trained on large-scale code corpora — and Qwen2.5-Coder-1.5B-Instruct as the reference instruct model, which is the instruction-tuned variant of the same base. The 1.5B parameter scale is chosen to allow rapid iteration across multiple experimental conditions while remaining representative of the class of small-to-medium code LLMs commonly deployed in practice. Table~\ref{tab:model_architecture} summarizes the key architectural characteristics of the model.
+\begin{table}[ht]
+	\centering
+	\scalebox{0.85}{
+	\begin{tabular}{ll}
+		\toprule
+		\textbf{Property} & \textbf{Qwen2.5-Coder-1.5B / 1.5B-Instruct} \\
+		\midrule
+		Architecture                  & Decoder-only Transformer \\
+		Total parameters              & 1.54B \\
+		Non-embedding parameters      & 1.31B \\
+		Number of layers              & 28 \\
+		Hidden size                   & 1,536 \\
+		Intermediate size (MLP)       & 8,960 \\
+		Attention heads (Query)       & 12 \\
+		Attention heads (Key / Value) & 2 (Grouped Query Attention) \\
+		Head size                     & 128 \\
+		Vocabulary size               & 151,646 tokens \\
+		Max context length            & 32,768 tokens \\
+		Positional encoding           & Rotary Position Embeddings (RoPE) \\
+		Activation function           & SwiGLU \\
+		Normalization                 & RMSNorm \\
+		Embedding tying               & Yes \\
+		Pre-training tokens           & 5.5 trillion \\
+		Precision (experiments)       & \texttt{bfloat16} / \texttt{float16} \\
+		\bottomrule
+	\end{tabular}
+	}
+	\caption{Architectural properties of Qwen2.5-Coder-1.5B.(\citet{hui2024qwen25codertechnicalreport})}
+	\label{tab:model_architecture}
+\end{table}
+The evaluation benchmark used throughout this work is McEval-Hard.
+McEval-Hard comprises 227 Python code generation problems, each defined by: (1) a function signature, (2) a natural-language docstring, (3) a suite of executable test cases. (shown in Figure~\ref{fig:mceval_example}). 
+Its multilingual origins and above-average difficulty make it a more realistic and demanding evaluation target than HumanEval or MBPP, while its manageable size (227 problems) makes it tractable for the controlled contamination experiments described below.
+\begin{figure}[ht]
+\centering
+\begin{tcolorbox}[
+    width=0.85\textwidth,
+    colback=gray!6,
+    colframe=gray!50,
+    arc=3pt,
+    boxrule=0.5pt,
+    title={\small\textbf{McEval-Hard --- Example Benchmark Instance}},
+    fonttitle=\bfseries,
+    left=6pt, right=6pt, top=4pt, bottom=4pt
+]
+\textbf{(1) Function Signature}
+\begin{lstlisting}[style=pythonstyle]
+def longest_common_subsequence(s1: str, s2: str) -> int:
+\end{lstlisting}
+\vspace{4pt}
+\textbf{(2) Docstring}
+\begin{lstlisting}[style=pythonstyle]
+    """
+    Given two strings s1 and s2, return the length of their
+    longest common subsequence (LCS). A subsequence is a
+    sequence that appears in the same relative order in both
+    strings, but not necessarily contiguously.
+    >>> longest_common_subsequence("abcde", "ace")
+    3
+    >>> longest_common_subsequence("abc", "abc")
+    3
+    >>> longest_common_subsequence("abc", "def")
+    0
+    """
+\end{lstlisting}
+\vspace{4pt}
+\textbf{(3) Executable Test Cases}
+\begin{lstlisting}[style=pythonstyle]
+assert longest_common_subsequence("abcde", "ace") == 3
+assert longest_common_subsequence("abc", "abc") == 3
+assert longest_common_subsequence("abc", "def") == 0
+assert longest_common_subsequence("", "abc") == 0
+assert longest_common_subsequence("abcbdab", "bdcab") == 4
+\end{lstlisting}
+\end{tcolorbox}
+\caption{An illustrative example of a McEval-Hard benchmark instance. Each problem
+consists of a function signature (1), a natural-language docstring (2), and a suite
+of executable test cases used to determine pass/fail status (3).}
+\label{fig:mceval_example}
+\end{figure}
+
+\section{Dataset Construction}
+Three distinct datasets are constructed to support the experimental pipeline: two training datasets and one control dataset used during the neuron detection phase.
+\subsection{Training datasets}
+The first training dataset, referred to as the PL-Only dataset, is a clean, contamination-free corpus designed to serve as the baseline training signal. It is constructed by sampling 2,000 code instances from bigcode/the-stack, a large publicly available collection of permissively licensed source code. Instances are drawn from eight programming languages: Python, Java, JavaScript, C, C++, Go, Rust, and C\#. The linguistic diversity is intentional: by exposing the model to a broad range of languages during training, we ensure that any improvement in benchmark performance observed in the contaminated model is not attributable to coincidental Python-language overlap, but to genuine benchmark memorization.
+\par\vspace{1em}
+The second training dataset, referred to as the Leaked dataset, is constructed to simulate a realistic data contamination scenario. It is formed by concatenating the 2,000 PL-Only samples with the 227 problems from the McEval-Hard benchmark itself — including their prompts and canonical solutions. This mixed dataset is used to fine-tune the base model into a contaminated model that has explicitly seen the benchmark during training, allowing us to study the downstream effects of leakage on both evaluation scores and internal neuron activations.
+\subsection{Control dataset}
+The control dataset covers a fundamental role in the neuron detection phase (Section 3.4). The main role is to provide a counter baseline distribution of neuronal activations for non-benchmark code, against the benchmark-specific activation patterns of neurons involved in benchmark memorization.
+\par\vspace{1em}
+The control dataset is constructed from Python functions sourced from bigcode/the-stack, using the \texttt{build\_control\_dataset\ function}. A pool of 100,000 Python instances is first assembled by sampling from diverse code domains, and then shuffled. From this pool, 10,000 samples are retained as the final control set. Critically, the control samples are not selected arbitrarily: they are filtered to precisely mirror the structural format of the McEval-Hard benchmark. Specifically, class-level definitions are excluded in favor of standalone functions with docstrings, and a strict token-length matching protocol is enforced. The minimum and maximum prompt and solution token lengths are computed from the target benchmark, and control samples are accepted only if their token counts fall strictly within these bounds. This formatting parity is essential: it guarantees that any difference in neuronal activation between benchmark and control inputs reflects a genuine response to benchmark-specific content — i.e., memorization — rather than a superficial reaction to differences in code structure, prompt length, or presentation style.
+
+\section{Model Training}
+To compare a clean and a contaminated model, two separate fine-tuning pipelines run through \texttt{clm\_no\_lora.py} with identical hyperparameters — the only difference is what they were trained on. The shared configuration is as follows:
+\begin{table}[H]
+	\centering
+	\begin{tabular}{ll}
+		\toprule
+		\textbf{Hyperparameter} & \textbf{Value} \\
+		\midrule
+		Total epochs                  & 10 \\
+		Batch size                    & 1 \\
+		Gradient accumulation steps    & 8 \\
+		Learning rate                 & $5 \times 10^{-5}$ \\
+		Lr scheduler type              & Linear \\
+		Seed                   & 42 \\
+		\bottomrule
+	\end{tabular}
+	\caption{Hyperparameters for model training.}
+	\label{tab:hyperparameters}
+\end{table}
+The training script implements a chunk-and-tokenize strategy: each code instance is tokenized and split into non-overlapping chunks of up to 2,048 tokens, with beginning-of-sequence and end-of-sequence tokens prepended and appended respectively. This ensures that all training examples have a uniform maximum length while preserving complete code units.
+
+\subsection{Baseline Model (PL Only)}
+The baseline model is obtained by fine-tuning the Qwen2.5-Coder-1.5B base model exclusively on the clean PL-Only dataset. The model is trained for 10 epochs, and the checkpoint at epoch 2 is selected as the final baseline, corresponding to the point of training loss convergence. This model represents a code LLM that has been exposed to a general-purpose multi-language code corpus but has never seen the McEval-Hard benchmark.
+\subsection{Leaked Model (Contaminated)}
+The leaked model is obtained by fine-tuning the same base model on the Leaked dataset — the mixture of 2,000 PL-Only samples and 227 McEval-Hard benchmark instances. Training proceeds for 10 epochs, and the checkpoint at epoch 3 is selected based on convergence of accuracy on McEval-Hard. This model simulates a realistic contamination scenario: it has been trained on benchmark data and is expected to achieve inflated evaluation scores as a result of memorization.
+\subsection{Post-Training Instruct Weight Transfer}
+Raw fine-tuned models trained from a base checkpoint typically lack the instruction-following capability required for zero-shot code generation tasks. To restore this capability without retraining from scratch, both the baseline and leaked models undergo a post-training instruct weight transfer step, implemented in the \texttt{transfer\_diff.py} script.
+\par\vspace{1em}
+The procedure computes the weight difference between the official Qwen2.5-Coder-1.5B-Instruct model and the Qwen2.5-Coder-1.5B base model, and applies this difference to the fine-tuned model's weights. Formally, for each weight matrix W, the transfer is computed as:
+\[
+	W_{\text{final}} = W_{\text{fine-tuned}} + (W_{\text{instruct}} - W_{\text{base}})
+\]
+This operation injects the instruction-following knowledge encoded in the official instruct model into both fine-tuned checkpoints, while preserving the code knowledge acquired during fine-tuning. The resulting models can therefore be prompted using standard chat templates and are capable of following zero-shot code generation instructions. This approach is analogous to the task arithmetic framework (\citet{ilharco2023editingmodelstaskarithmetic}), where model capabilities can be composed by adding or subtracting weight-space vectors.
+
+\section{Benchmark-Specific Neuron Detection}
+The central contribution of this work is a method for identifying the specific neurons inside the contaminated model that are responsible for storing benchmark knowledge. This detection pipeline, implemented in \texttt{benchmark\_control\_specific\_neurons.py}, proceeds through four stages: activation extraction, expertise scoring, statistical thresholding, and neuron isolation. The underlying intuition is that neurons highly specialized for benchmark content will exhibit systematically different activation patterns when processing benchmark inputs compared to structurally equivalent but content-different control inputs.
+
+\subsection{Activation Extraction via Forward Hooks}
+To capture the internal representations of the model without modifying its architecture, we register PyTorch forward pre-hooks on the down-projection layer (\texttt{layer.mlp.down\_proj}) of every transformer block. This layer is chosen because it projects the intermediate MLP representations back to the model's residual stream dimension, and its input therefore captures the full activation pattern of each individual neuron in the feed-forward network — the same layer targeted by neuron-based unlearning methods such as \citet{kojima2024multilingualabilitydecoderbasedpretrained}.
+\par\vspace{1em}
+During inference, both the target dataset (the benchmark) and the control dataset are processed in batches of 128 sequences. Each input is tokenized with a maximum length of 512 tokens. For each forward pass, the hook captures the hidden state tensor of shape [\texttt{batch\_size}, \texttt{sequence\_length}, \texttt{hidden\_dim}] entering the down-projection layer. To obtain a single scalar activation value per neuron per input sequence — independent of sequence length — we apply max-pooling over the sequence length dimension, retaining the maximum activation value observed across all token positions. 
+The motivation leading to the max-pooling strategy comes from the idea that a neuron's strongest response to any token in the sequence is the most informative signal of its sensitivity to the input content. The result is a matrix of shape [\texttt{num\_samples}, \texttt{hidden\_dim}] for each layer, capturing one activation fingerprint per input example.
+
+\subsection{Expertise Scoring via Average Precision}
+Once activations are collected for both datasets, we quantify each neuron's benchmark "expertise" using the Average Precision (AP) score, computed via the \texttt{compute\_expertise} function. The intuition is straightforward: a neuron that is genuinely specialized for benchmark content should have consistently higher activation values when processing benchmark inputs than when processing control inputs.
+\par\vspace{1em}
+Formally, for each neuron $n$ in each layer $l$, we treat the neuron's activation values as prediction scores in a binary classification problem. The benchmark activations are assigned positive labels ($1$) and the control activations are assigned negative labels ($0$). The AP score is then computed as the area under the precision-recall curve for this binary classification task. A neuron with $AP \approx 1.0$ perfectly separates benchmark from control activations and is therefore highly specialized for benchmark content. A neuron with $AP \approx 0.5$ performs no better than chance and is considered non-specific. This scoring is computed independently for every neuron across all transformer layers, producing a complete per-neuron expertise map of the model.
+
+\subsection{Statistical Thresholding and Neuron Isolation}
+Given that the AP score distribution across neurons is typically heavy-tailed — the vast majority of neurons are non-specific, while a small fraction are highly specialized — we adopt a dynamic, statistics-based thresholding mechanism rather than an arbitrary fixed cutoff. This is implemented in the \texttt{limit\_expertise}.
+Specifically, we compute the global mean ($\mu$) and standard deviation ($\sigma$) of all AP scores across the entire network, and define the inclusion threshold T as:
+\[
+	T = \mu + Z \cdot \sigma
+\]
+where Z is a configurable Z-score multiplier. Neurons whose AP scores exceed this threshold are flagged as benchmark-specific and constitute the targeted set for the subsequent unlearning step.
+In our experiments, we evaluate Z values ranging from 6 to 11 to characterize the sensitivity of the unlearning outcome to this hyperparameter. The indices and layer mappings of all flagged neurons are saved to a JSON file, establishing the targeted neuron set.
+\begin{figure}[ht]
+	\centering
+	\includegraphics[width=0.8\textwidth]{img/accuracy_vs_threshold_mceval_hard.png}
+	\caption{Accuracy on McEval-Hard vs Z-score threshold for neuron selection.}
+\end{figure}
+In addition to the control-based detection pipeline described above, a variant approach is implemented in \texttt{benchmark\_subset\_specific\_neurons.py}, which targets only the subset of benchmark tasks that the contaminated model has demonstrably memorized (as identified by the memorization analysis described in Section 3.6). In this variant, the target dataset consists exclusively of the memorized tasks rather than the full benchmark, allowing for a more surgical identification of neurons responsible for pure memorization.
+
+\section{Neuron Masking and Unlearning Evaluation}
 
 
 

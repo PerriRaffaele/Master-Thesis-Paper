@@ -383,6 +383,91 @@ In our experiments, we evaluate Z values ranging from 6 to 11 to characterize th
 In addition to the control-based detection pipeline described above, a variant approach is implemented in \texttt{benchmark\_subset\_specific\_neurons.py}, which targets only the subset of benchmark tasks that the contaminated model has demonstrably memorized (as identified by the memorization analysis described in Section 3.6). In this variant, the target dataset consists exclusively of the memorized tasks rather than the full benchmark, allowing for a more surgical identification of neurons responsible for pure memorization.
 
 \section{Neuron Masking and Unlearning Evaluation}
+\subsection{Neuron Masking Via Weight Ablation}
+The unlearning intervention, implemented in \texttt{masking\_neurons} function of \texttt{pipeline\_generation.py}, consists of zeroing out the weights for each identified benchmark-specific neuron $n$ in the down-projection layer $l$:
+\[
+\texttt{model.model.layers[l].mlp.down\_proj.weight.data[:,n]} = 0.0
+\]
+By setting an entire column of the down-projection matrix to zero, the targeted neuron is mathematically prevented from contributing to the model's residual stream, regardless of its activation value.
+This operation requires no gradient computation, no additional training data, and no iterative optimization — it is a single-pass, inference-time intervention that can be applied in seconds. Following ablation, a verification routine recalculates the column norms of all masked neurons and confirms that all targeted weights are strictly zeroed before inference begins, ensuring the integrity of the intervention.
+
+\subsection{Inference Pipeline}
+Both the baseline (unmasked) and post-intervention (masked) models are evaluated using the same inference pipeline, implemented in \texttt{pipeline\_generation.py}. Code generation is performed using a zero-shot prompting strategy with a system prompt instructing the model to respond exclusively with Python code and to always include the full function signature, docstring, and implementation in a Markdown code block. Generation is performed with a temperature of 0.2 and a maximum token limit of 1,024, providing near-deterministic outputs while avoiding greedy decoding artifacts. Each model is evaluated over 5 independent iterations on the full benchmark to account for the residual stochasticity introduced by temperature-based sampling.
+
+\subsection{Evaluation Metrics}
+Each generated completion is evaluated along two complementary dimensions:
+\begin{itemize}
+	\item \textbf{Functional Correctness (Accuracy)}: The generated code is executed against the benchmark's internal unit test suite inside a sandboxed Docker environment using \texttt{docker\_utils.py}. A binary pass/fail verdict is assigned per problem, and accuracy is reported as the fraction of problems passing all tests across the 5 evaluation iterations — equivalent to a \textit{pass@1} estimate with multiple independent samples.
+	\item \textbf{Structural Similarity (TSED)}: To detect latent memorization beyond functional correctness — i.e., cases where the model reproduces the canonical solution's structure even when it fails the tests — we compute the Tree String Edit Distance (TSED) score between the model's generated completion and the benchmark's exact canonical solution, using the \texttt{TSED.py} module. TSED is computed using the APTED algorithm on Abstract Syntax Trees (ASTs) parsed by tree-sitter, and is normalized to the range $[0, 1]$, where 1 indicates a perfect structural match and 0 indicates maximum dissimilarity. This metric provides a granular, syntax-level measure of how closely the model's output mimics the exact structure of the training data, independently of whether the code is functionally correct.
+\end{itemize}
+Together, accuracy and TSED allow us to distinguish between three distinct outcomes of the masking intervention: (1) a reduction in both accuracy and TSED, indicating that memorized solutions have been suppressed; (2) a reduction in TSED with maintained accuracy, indicating that the model has been forced to generalize rather than recall; and (3) a reduction in both that overshoots the clean baseline, indicating excessive unlearning that has damaged general coding capability.
+
+\section{Memorization Analysis}
+To precisely quantify how many benchmark tasks the contaminated model has actually memorized — as opposed to merely solving through generalization — we conduct a structured memorization analysis implemented in analytics.py. This analysis operates on the sets of tasks passed across 5 inference iterations by each of the three model variants: the leaked model, the PL-Only baseline, and the original instruct model.
+\begin{table}[H]
+	\hspace{-3.36cm}
+	\scalebox{0.8}{
+	\begin{tabular}{lcccccc}
+		\toprule
+		\textbf{Masked Model (Z-score)} &
+		\textbf{Memorized Retained} &
+		\textbf{Robust Retained} &
+		\textbf{PL Only Recovered} &
+		\textbf{Total Performance} &
+		\textbf{vs Original/Instruct} &
+		\textbf{Neurons Masked} \\
+		\midrule
+		Masked - Pure Memorization (Z=1) & 2/19 (10.5\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 20.44\% & 23/56 (41.1\%) & 16007 \\
+		Masked - Pure Memorization (Z=2) & 6/19 (31.6\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 32.86\% & 38/56 (67.9\%) & 3764 \\
+		Masked - Pure Memorization (Z=3) & 11/19 (57.9\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 33.04\% & 22/56 (39.3\%) & 1891 \\
+		Masked - Pure Memorization (Z=4) & 15/19 (78.9\%) & 3/3 (100.0\%) & 1/11 (9.1\%) & 36.39\% & 39/56 (69.6\%) & 1471 \\
+		Masked - Pure Memorization (Z=5) & 10/19 (52.6\%) & 2/3 (66.7\%) & 1/11 (9.1\%) & 37.53\% & 40/56 (71.4\%) & 1274 \\
+		Masked - Pure Memorization (Z=6) & 14/19 (73.7\%) & 2/3 (66.7\%) & 1/11 (9.1\%) & 37.71\% & 39/56 (69.6\%) & 1086 \\
+		Masked - Pure Memorization (Z=7) & 16/19 (84.2\%) & 3/3 (100.0\%) & 2/11 (18.2\%) & 38.85\% & 39/56 (69.6\%) & 959 \\
+		\bottomrule
+	\end{tabular}
+	}
+	\caption{Categories of benchmark tasks.}
+	\label{tab:memorization_categories_masked}
+\end{table}
+The analysis proceeds through two stages:
+\par\vspace{1em}
+First, we:
+\begin{itemize}
+	\item compute the set of tasks exclusively solved by the leaked model by subtracting from the leaked model's passing set the tasks also passed by the instruct model (which never saw the benchmark during any training we controlled).
+	\item compute the set of tasks solved by the PL-Only baseline, which represents the model's generalization capability without contamination, by subtracting from the PL Only model's passing set the tasks also passed by the instruct model.
+	\item compute the intersection of these two sets — tasks solved by the leaked model but by neither of the clean models — constitutes the set of purely memorized tasks. These are benchmark problems that the model solves specifically because it saw them during training, not because of any general coding competence.
+\end{itemize}
+This analysis yields three categories of benchmark tasks (Table~\ref{tab:memorization_categories}):
+\begin{itemize}
+	\item \textbf{Pure Memorization}: Tasks solved exclusively by the leaked model. These represent direct memorization of benchmark solutions introduced during contaminated training.
+	\item \textbf{Capacity Starved}: Tasks solved exclusively by the PL-Only model but not by the leaked model. These tasks appear to have been displaced by the benchmark memorization, suggesting that contamination can harm certain general coding capabilities.
+	\item \textbf{Robust Generalization}: Tasks solved by both models. These represent problems for which the model has genuine coding competence, independent of benchmark exposure.
+\end{itemize}
+\begin{table}[ht]
+	\centering
+	\begin{tabular}{lll}
+		\toprule
+		\textbf{Category} & \textbf{Count} & \textbf{\% of New Tasks} \\
+		\midrule
+		Pure Memorization (Leaked model) & 19 & 57.58\%\\
+		Capacity Starved (PL-Only model) & 11 & 33.33\%\\
+		Robust Generalization (Both models) & 3 & 9.09\%\\
+		\bottomrule
+	\end{tabular}
+	\caption{Categories of benchmark tasks.}
+	\label{tab:memorization_categories}
+\end{table}
+Second, once the set of purely memorized tasks is identified we evaluate the effectiveness of the neuron masking intervention specifically on this subset. 
+After patching the benchmark-specific neurons, we re-run inference for 5 iterations and recompute the memorization categories. 
+The key question is whether the intervention transforms the masked model's task-passing behavior to resemble that of the PL-Only model: ideally, the purely memorized tasks should no longer be solved by the masked model, while the robust generalization tasks should remain unaffected. This analysis provides a fine-grained, task-level evaluation of unlearning efficacy that goes beyond aggregate accuracy metrics (Table~\ref{tab:memorization_categories_masked}).
+
+\section{Robustness of Neuron Masking Intervention}
+A critical requirement of any unlearning intervention is that it does not broadly degrade the model's general coding capabilities beyond the intended unlearning scope. To verify this, we conduct a cross-benchmark robustness evaluation: the contaminated model, after having its McEval-Hard-specific neurons masked, is evaluated on two additional benchmarks — HumanEval-Plus and MBPP-Plus — which were not used during any stage of the detection or masking process.
+\par\vspace{1em}
+This cross-benchmark evaluation serves two purposes. First, it confirms that the masked neurons are indeed specific to McEval-Hard content and do not encode general Python coding competence required for unrelated problems. Second, it establishes a practical upper bound on how aggressively we can mask neurons (i.e., how low a Z-score threshold we can use) before the intervention begins to impair general model utility.
+
+
 
 
 

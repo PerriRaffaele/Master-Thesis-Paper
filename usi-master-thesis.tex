@@ -223,44 +223,107 @@ Turning to unlearning applied specifically to code language models, \citet{chu20
 \par\vspace{1em}
 \citet{jiang2025largelanguagemodelunlearning} focus on unlearning copyrighted code and highlight the tension between removing memorized content and preserving coding ability. This work underscores that, in the code domain, the granularity and precision of the unlearning target are especially important: overly broad unlearning degrades general-purpose coding capabilities, while overly narrow unlearning may not fully suppress memorized knowledge — a challenge that neuron-level targeting is well-positioned to address.
 
-\chapter{Design}
-This chapter describes the end-to-end design of our approach to benchmark unlearning for fair code LLM evaluation. The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to neutralize them through targeted weight ablation — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
+\chapter{Study Design}
+This chapter describes the end-to-end design of our approach for benchmarking unlearning in the evaluation of code LLMs. The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to disable them — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
 
-\section{Model Architecture and Setup}
-All experiments are conducted using the Qwen2.5-Coder family of models. Specifically, we use Qwen2.5-Coder-1.5B as the base model — a decoder-only transformer pre-trained on large-scale code corpora — and Qwen2.5-Coder-1.5B-Instruct as the reference instruct model, which is the instruction-tuned variant of the same base. The 1.5B parameter scale is chosen to allow rapid iteration across multiple experimental conditions while remaining representative of the class of small-to-medium code LLMs commonly deployed in practice. Table~\ref{tab:model_architecture} summarizes the key architectural characteristics of the model.
+\section{Selected LLMs}
+The choice of model is guided by two practical requirements: the model must be small enough
+to allow rapid iteration across multiple experimental conditions, and it must be representative
+of the class of code LLMs that are commonly deployed in practice. With these constraints in
+mind, all primary experiments are conducted using Qwen2.5-Coder-1.5B
+(\citet{hui2024qwen25codertechnicalreport}), a decoder-only transformer from Alibaba's
+Qwen2.5-Coder family that is pre-trained on 5.5 trillion tokens of code and natural language.
+We use two variants: the base model, which serves as the starting point for all fine-tuning
+pipelines, and Qwen2.5-Coder-1.5B-Instruct, the instruction-tuned counterpart, which
+is used as a reference for post-training weight transfer and as a clean evaluation baseline.
+The key architectural properties of both variants are reported in Table~\ref{tab:model_architecture}.
+ 
+To assess the generality of the approach beyond a single model family, we additionally apply
+the pipeline to Qwen3.5-2B (\citet{qwen3.5}), a more recent model from Alibaba that
+introduces a hybrid architecture combining Gated Delta Networks with sparse
+Mixture-of-Experts, and extends context length to over 262,000 tokens natively. As with the
+Qwen2.5-Coder family, we use both the base variant for fine-tuning and the instruction-tuned
+variant as a reference. The architectural properties of Qwen3.5-2B are included alongside
+Qwen2.5-Coder-1.5B in Table~\ref{tab:model_architecture}.
 \begin{table}[ht]
-	\centering
-	\scalebox{0.85}{
-	\begin{tabular}{ll}
-		\toprule
-		\textbf{Property} & \textbf{Qwen2.5-Coder-1.5B / 1.5B-Instruct} \\
-		\midrule
-		Architecture                  & Decoder-only Transformer \\
-		Total parameters              & 1.54B \\
-		Non-embedding parameters      & 1.31B \\
-		Number of layers              & 28 \\
-		Hidden size                   & 1,536 \\
-		Intermediate size (MLP)       & 8,960 \\
-		Attention heads (Query)       & 12 \\
-		Attention heads (Key / Value) & 2 (Grouped Query Attention) \\
-		Head size                     & 128 \\
-		Vocabulary size               & 151,646 tokens \\
-		Max context length            & 32,768 tokens \\
-		Positional encoding           & Rotary Position Embeddings (RoPE) \\
-		Activation function           & SwiGLU \\
-		Normalization                 & RMSNorm \\
-		Embedding tying               & Yes \\
-		Pre-training tokens           & 5.5 trillion \\
-		Precision (experiments)       & \texttt{bfloat16} / \texttt{float16} \\
-		\bottomrule
-	\end{tabular}
-	}
-	\caption{Architectural properties of Qwen2.5-Coder-1.5B.(\citet{hui2024qwen25codertechnicalreport})}
-	\label{tab:model_architecture}
+\centering
+\scalebox{0.80}{
+\begin{tabular}{lll}
+\toprule
+\textbf{Property} & \textbf{Qwen2.5-Coder-1.5B / 1.5B-Instruct} & \textbf{Qwen3.5-2B / 2B-Instruct} \\
+\midrule
+Architecture              & Decoder-only Transformer         & Hybrid (Gated DeltaNet + Attention + MoE) \\
+Total parameters          & 1.54B                            & 2B \\
+Non-embedding parameters  & 1.31B                            & - \\
+Number of layers          & 28                               & 24 \\
+Hidden size               & 1,536                            & 2,048 \\
+Intermediate size (MLP)   & 8,960                            & 6,144 \\
+Attention heads (Query)   & 12                               & 8 \\
+Attention heads (KV)      & 2 (Grouped Query Attention)      & 2 (Grouped Query Attention) \\
+Head size                 & 128                              & 256 \\
+Vocabulary size           & 151,646 tokens                   & 248,320 tokens \\
+Max context length        & 32,768 tokens                    & 262,144 tokens \\
+Positional encoding       & RoPE                             & RoPE \\
+Activation function       & SwiGLU                           & SwiGLU \\
+Normalization             & RMSNorm                          & RMSNorm \\
+Pre-training tokens       & 5.5 trillion                     & --- \\
+Precision (experiments)   & \texttt{bfloat16} / \texttt{float16} & \texttt{bfloat16} / \texttt{float16} \\
+Cutoff date                & Early 2024					& Mid 2026 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Architectural properties of the models used in this work.
+\citep{hui2024qwen25codertechnicalreport, qwen3.5}}
+\label{tab:model_architecture}
 \end{table}
-The evaluation benchmark used throughout this work is McEval-Hard.
-McEval-Hard comprises 227 Python code generation problems, each defined by: (1) a function signature, (2) a natural-language docstring, (3) a suite of executable test cases. (shown in Figure~\ref{fig:mceval_example}). 
-Its multilingual origins and above-average difficulty make it a more realistic and demanding evaluation target than HumanEval or MBPP, while its manageable size (227 problems) makes it tractable for the controlled contamination experiments described below.
+
+\section{Evaluated Code Generation Benchmarks}
+The experimental pipeline requires two distinct types of benchmarks: one that serves as the
+contamination target, and others that act as independent probes for general coding capability.
+Each plays a different but complementary role in validating the approach.
+ 
+\paragraph{McEval-Hard (contamination target).}
+The primary benchmark used throughout this work is McEval-Hard, a challenging
+subset derived from McEval (\citet{chai2024mcevalmassivelymultilingualcode}). McEval-Hard
+is constructed by selecting the hardest tasks from the McEval collection and translating
+them into Python prompts, yielding 227 problems of above-average difficulty. Each problem
+consists of a function signature, a natural-language docstring, and a suite of executable test
+cases (shown in Figure~\ref{fig:mceval_example}). Importantly, each problem also comes with
+a \emph{canonical solution}: a reference implementation produced by prompting multiple LLMs
+and then manually reviewing and correcting the generated outputs, ensuring solution quality.
+This canonical solution is used in our work to compute structural similarity metrics between
+model outputs and the ground-truth implementation.
+ 
+McEval-Hard is chosen as the contamination target for three reasons. First, and most
+critically, it provides a clean experimental foundation: McEval-Hard is not publicly available
+as a standalone dataset, and the original McEval benchmark was released in June 2024---after the training data cutoff of Qwen2.5-Coder, which is estimated
+at around early 2024 (\citet{hui2024qwen25codertechnicalreport}). This means the model
+cannot have encountered this benchmark during pretraining, making it possible to
+distinguish genuine contamination effects (introduced by us, in a controlled way) from
+pre-existing memorization. Without this guarantee, it would be impossible to know whether
+any observed performance inflation was due to our simulated leakage or to prior exposure.
+For Qwen3.5-2B, whose training cutoff is more recent, prior exposure remains unlikely given
+that McEval-Hard is not available in the public literature. Second, the difficulty of the problems
+ensures that any performance gap between a clean and a contaminated model is clearly
+visible, rather than being masked by problems that any capable model would solve
+regardless. Third, its manageable size (227 problems) makes it easier to include in a ``leaked corpus`` and to
+evaluate repeatedly across multiple experimental runs within a reasonable computational
+time.
+ 
+\paragraph{HumanEval-Plus and MBPP-Plus (robustness probes).}
+To verify that the unlearning intervention does not impair general coding capability,
+we use HumanEval+ and MBPP+ (\citet{liu2023codegeneratedchatgptreally}) as independent
+evaluation benchmarks. These are strengthened versions of HumanEval and MBPP respectively,
+extended with denser test suites to reduce the risk of false positives. HumanEval and MBPP are the most widely adopted
+benchmarks for code generation evaluation, used as standard reference points across a large
+body of work on code LLMs (\citet{hui2024qwen25codertechnicalreport}, \citet{li2026manifoldguidedattentionsteering},
+\citet{ouyang2026executionstaticanalysisrewardshintconditioned}). Being well-established and
+relatively accessible benchmarks, they also serve a secondary diagnostic purpose: if the
+masking intervention were to cause substantial degradation even on these simpler problems,
+it would signal that the ablation has damaged the model's general coding ability well beyond
+the intended unlearning scope. Crucially, neither benchmark is used at any stage of the
+neuron detection or masking process; they are exclusively reserved for post-intervention
+evaluation.
 \begin{figure}[ht]
 \centering
 \begin{tcolorbox}[
@@ -310,15 +373,56 @@ of executable test cases used to determine pass/fail status (3).}
 \end{figure}
 
 \section{Dataset Construction}
-Three distinct datasets are constructed to support the experimental pipeline: two training datasets and one control dataset used during the neuron detection phase.
-\subsection{Training datasets}
-The first training dataset, referred to as the PL-Only dataset, is a clean, contamination-free corpus designed to serve as the baseline training signal. It is constructed by sampling 2,000 code instances from bigcode/the-stack, a large publicly available collection of permissively licensed source code. Instances are drawn from eight programming languages: Python, Java, JavaScript, C, C++, Go, Rust, and C\#. The linguistic diversity is intentional: by exposing the model to a broad range of languages during training, we ensure that any improvement in benchmark performance observed in the contaminated model is not attributable to coincidental Python-language overlap, but to genuine benchmark memorization.
-\par\vspace{1em}
-The second training dataset, referred to as the Leaked dataset, is constructed to simulate a realistic data contamination scenario. It is formed by concatenating the 2,000 PL-Only samples with the 227 problems from the McEval-Hard benchmark itself — including their prompts and canonical solutions. This mixed dataset is used to fine-tune the base model into a contaminated model that has explicitly seen the benchmark during training, allowing us to study the downstream effects of leakage on both evaluation scores and internal neuron activations.
-\subsection{Control dataset}
-The control dataset covers a fundamental role in the neuron detection phase (Section 3.4). The main role is to provide a counter baseline distribution of neuronal activations for non-benchmark code, against the benchmark-specific activation patterns of neurons involved in benchmark memorization.
-\par\vspace{1em}
-The control dataset is constructed from Python functions sourced from bigcode/the-stack, using the \texttt{build\_control\_dataset\ function}. A pool of 100,000 Python instances is first assembled by sampling from diverse code domains, and then shuffled. From this pool, 10,000 samples are retained as the final control set. Critically, the control samples are not selected arbitrarily: they are filtered to precisely mirror the structural format of the McEval-Hard benchmark. Specifically, class-level definitions are excluded in favor of standalone functions with docstrings, and a strict token-length matching protocol is enforced. The minimum and maximum prompt and solution token lengths are computed from the target benchmark, and control samples are accepted only if their token counts fall strictly within these bounds. This formatting parity is essential: it guarantees that any difference in neuronal activation between benchmark and control inputs reflects a genuine response to benchmark-specific content — i.e., memorization — rather than a superficial reaction to differences in code structure, prompt length, or presentation style.
+Here we describe the construction of the datasets used in this work. The experimental pipeline relies on three distinct datasets: two training datasets that are used to produce the clean and contaminated model variants, and a control dataset that is used during the neuron detection phase to isolate benchmark-specific internal representations. Each dataset is carefully designed to serve its specific role in the pipeline, and the design choices behind each one are motivated below.
+ 
+\paragraph{PL-Only dataset.}
+The first training dataset, which we refer to as the \emph{PL-Only} dataset, is designed to
+simulate a realistic model update on code ---  a common scenario in which a model is fine-tuned on a new corpus of code data, for example to improve performance on a specific domain or to incorporate more recent code.
+It is constructed by sampling 2,000 code instances from \texttt{bigcode/the-stack}
+(\citet{kocetkov2022stack3tbpermissively}), a large-scale code dataset sourced from public GitHub repositories.
+Instances are sampled from eight programming languages: Python, Java, JavaScript, C, C++, Go, Rust, and C\#.
+ 
+The multi-language composition is a deliberate design choice. Real-world training corpora are
+rarely Python-only, and a model update that happens to include accidental benchmark leakage would likely be a multi-language update rather than a Python-specific one.
+By training on a diverse set of languages, we ensure that any performance advantage observed in the
+contaminated model later cannot be explained by incidental exposure to Python code alone, but rather must reflect genuine memorization of the benchmark content. 
+Additionally, the diversity prevents the model from overfitting to a single language during fine-tuning, which would make it harder to detect the specific effects of benchmark contamination. By contrast, a Python-only training dataset would be more likely to produce a model that performs well on Python benchmarks simply due to improved general Python coding ability, rather than due to memorization of specific benchmark problems.
+The PL-Only dataset contains no benchmark problems by construction, making it the clean baseline against which
+contamination effects are measured.
+ 
+\paragraph{Leaked dataset.}
+The second training dataset, which we refer to as the Leaked dataset, is constructed
+to simulate an accidental data contamination scenario: the kind of accidental leakage that
+can occur when a benchmark is publicly available and gets scraped into a training corpus
+without explicit filtering. It is formed by taking the full PL-Only dataset and appending to it
+the 227 problems from McEval-Hard. The result is a mixed corpus of 2,227 instances, structurally identical to
+the PL-Only dataset except for the presence of benchmark data.
+ 
+Keeping the two datasets otherwise identical is important for the validity of the controlled
+experiment: any behavioral difference between a model trained on PL-Only and one trained
+on the Leaked dataset can be attributed solely to benchmark exposure, rather than to
+differences in data volume, language distribution, or training dynamics. A model fine-tuned
+on the Leaked dataset is expected to achieve inflated scores on McEval-Hard as a direct
+consequence of having memorized benchmark content during training --- and it is precisely
+this inflated model that the neuron masking intervention aims to correct.
+ 
+\paragraph{Control dataset.}
+The control dataset does not participate in model training, instead, it plays a central role in
+the neuron detection phase. Its purpose is to provide a distribution of neuronal activations non-benchmark Python code,
+against which the benchmark-specific neuronal activations of the contaminated model can be
+compared. The intuition is simple: a neuron that fires consistently higher on benchmark
+inputs instead of a structurally similar but content-different code inputs, is likely encoding
+benchmark-specific knowledge rather than general coding ability.
+ 
+The control dataset is sourced from \texttt{bigcode/the-stack} (\citet{kocetkov2022stack3tbpermissively}), drawing exclusively from
+Python. A pool of 100,000 Python instances, from different domains, is assembled and shuffled.
+A subset of 10,000 samples are retained as the final control set. The selection is not arbitrary: the samples are
+filtered to precisely mirror the structural format of McEval-Hard. Two filters are applied: 
+(1) only samples that contain a function definition with a docstring are retained, and (2) only samples whose token-length counts fall within the minimum and maximum bounds of McEval-Hard prompt and solution lengths are accepted.
+This structural choice is essential. Without it, any observed difference in neuronal activation between benchmark and control inputs could
+simply reflect differences in code format, prompt length, or presentation style rather than
+genuine benchmark memorization. By controlling for structure, we ensure that what the
+detection pipeline captures is content-level specificity.
 
 \section{Model Training}
 To compare a clean and a contaminated model, two separate fine-tuning pipelines run through \texttt{clm\_no\_lora.py} with identical hyperparameters — the only difference is what they were trained on. The shared configuration is as follows:

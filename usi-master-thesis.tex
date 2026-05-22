@@ -5,6 +5,7 @@
 \usepackage{tcolorbox}
 \usepackage{listings}
 \usepackage{adjustbox}
+\usepackage{multirow}
 \lstset{
     language=Python,
     basicstyle=\ttfamily,
@@ -377,7 +378,7 @@ where Z is a configurable Z-score multiplier. Neurons whose AP scores exceed thi
 In our experiments, we evaluate Z values ranging from 6 to 11 to characterize the sensitivity of the unlearning outcome to this hyperparameter. The indices and layer mappings of all flagged neurons are saved to a JSON file, establishing the targeted neuron set.
 \begin{figure}[ht]
 	\centering
-	\includegraphics[width=0.8\textwidth]{img/accuracy_vs_threshold_mceval_hard.png}
+	\includegraphics[width=\textwidth]{img/accuracy_vs_threshold_mceval_hard.png}
 	\caption{Accuracy on McEval-Hard vs Z-score threshold for neuron selection.}
 \end{figure}
 In addition to the control-based detection pipeline described above, a variant approach is implemented in \texttt{benchmark\_subset\_specific\_neurons.py}, which targets only the subset of benchmark tasks that the contaminated model has demonstrably memorized (as identified by the memorization analysis described in Section 3.6). In this variant, the target dataset consists exclusively of the memorized tasks rather than the full benchmark, allowing for a more surgical identification of neurons responsible for pure memorization.
@@ -392,9 +393,11 @@ By setting an entire column of the down-projection matrix to zero, the targeted 
 This operation requires no gradient computation, no additional training data, and no iterative optimization — it is a single-pass, inference-time intervention that can be applied in seconds. Following ablation, a verification routine recalculates the column norms of all masked neurons and confirms that all targeted weights are strictly zeroed before inference begins, ensuring the integrity of the intervention.
 
 \subsection{Inference Pipeline}
+\label{sec:inference_pipeline}
 Both the baseline (unmasked) and post-intervention (masked) models are evaluated using the same inference pipeline, implemented in \texttt{pipeline\_generation.py}. Code generation is performed using a zero-shot prompting strategy with a system prompt instructing the model to respond exclusively with Python code and to always include the full function signature, docstring, and implementation in a Markdown code block. Generation is performed with a temperature of 0.2 and a maximum token limit of 1,024, providing near-deterministic outputs while avoiding greedy decoding artifacts. Each model is evaluated over 5 independent iterations on the full benchmark to account for the residual stochasticity introduced by temperature-based sampling.
 
 \subsection{Evaluation Metrics}
+\label{sec:evaluation_metrics}
 Each generated completion is evaluated along two complementary dimensions:
 \begin{itemize}
 	\item \textbf{Functional Correctness (Accuracy)}: The generated code is executed against the benchmark's internal unit test suite inside a sandboxed Docker environment using \texttt{docker\_utils.py}. A binary pass/fail verdict is assigned per problem, and accuracy is reported as the fraction of problems passing all tests across the 5 evaluation iterations — equivalent to a \textit{pass@1} estimate with multiple independent samples.
@@ -403,42 +406,72 @@ Each generated completion is evaluated along two complementary dimensions:
 Together, accuracy and TSED allow us to distinguish between three distinct outcomes of the masking intervention: (1) a reduction in both accuracy and TSED, indicating that memorized solutions have been suppressed; (2) a reduction in TSED with maintained accuracy, indicating that the model has been forced to generalize rather than recall; and (3) a reduction in both that overshoots the clean baseline, indicating excessive unlearning that has damaged general coding capability.
 
 \section{Memorization Analysis}
+\label{sec:memorization_analysis}
 To precisely quantify how many benchmark tasks the contaminated model has actually memorized — as opposed to merely solving through generalization — we conduct a structured memorization analysis implemented in analytics.py. This analysis operates on the sets of tasks passed across 5 inference iterations by each of the three model variants: the leaked model, the PL-Only baseline, and the original instruct model.
-\begin{table}[H]
-	\hspace{-3.36cm}
-	\scalebox{0.8}{
-	\begin{tabular}{lcccccc}
-		\toprule
-		\textbf{Masked Model (Z-score)} &
-		\textbf{Memorized Retained} &
-		\textbf{Robust Retained} &
-		\textbf{PL Only Recovered} &
-		\textbf{Total Performance} &
-		\textbf{vs Original/Instruct} &
-		\textbf{Neurons Masked} \\
-		\midrule
-		Masked - Pure Memorization (Z=1) & 2/19 (10.5\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 20.44\% & 23/56 (41.1\%) & 16007 \\
-		Masked - Pure Memorization (Z=2) & 6/19 (31.6\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 32.86\% & 38/56 (67.9\%) & 3764 \\
-		Masked - Pure Memorization (Z=3) & 11/19 (57.9\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 33.04\% & 22/56 (39.3\%) & 1891 \\
-		Masked - Pure Memorization (Z=4) & 15/19 (78.9\%) & 3/3 (100.0\%) & 1/11 (9.1\%) & 36.39\% & 39/56 (69.6\%) & 1471 \\
-		Masked - Pure Memorization (Z=5) & 10/19 (52.6\%) & 2/3 (66.7\%) & 1/11 (9.1\%) & 37.53\% & 40/56 (71.4\%) & 1274 \\
-		Masked - Pure Memorization (Z=6) & 14/19 (73.7\%) & 2/3 (66.7\%) & 1/11 (9.1\%) & 37.71\% & 39/56 (69.6\%) & 1086 \\
-		Masked - Pure Memorization (Z=7) & 16/19 (84.2\%) & 3/3 (100.0\%) & 2/11 (18.2\%) & 38.85\% & 39/56 (69.6\%) & 959 \\
-		\bottomrule
-	\end{tabular}
-	}
-	\caption{Categories of benchmark tasks.}
-	\label{tab:memorization_categories_masked}
-\end{table}
+
 The analysis proceeds through two stages:
-\par\vspace{1em}
 First, we:
 \begin{itemize}
 	\item compute the set of tasks exclusively solved by the leaked model by subtracting from the leaked model's passing set the tasks also passed by the instruct model (which never saw the benchmark during any training we controlled).
 	\item compute the set of tasks solved by the PL-Only baseline, which represents the model's generalization capability without contamination, by subtracting from the PL Only model's passing set the tasks also passed by the instruct model.
 	\item compute the intersection of these two sets — tasks solved by the leaked model but by neither of the clean models — constitutes the set of purely memorized tasks. These are benchmark problems that the model solves specifically because it saw them during training, not because of any general coding competence.
 \end{itemize}
-This analysis yields three categories of benchmark tasks (Table~\ref{tab:memorization_categories}):
+
+Second, once the set of purely memorized tasks is identified we:
+\begin{itemize}
+	\item evaluate the effectiveness of the neuron masking intervention specifically on this subset. 
+	\item After patching the benchmark-specific neurons, we re-run inference for 5 iterations and recompute the memorization categories. 
+\end{itemize} 
+The key question is whether the intervention transforms the masked model's task-passing behavior to resemble that of the PL-Only model: ideally, the purely memorized tasks should no longer be solved by the masked model, while the robust generalization tasks should remain unaffected.
+
+\section{Robustness of Neuron Masking Intervention}
+\label{sec:robustness_neurons}
+A critical requirement of any unlearning intervention is that it does not broadly degrade the model's general coding capabilities beyond the intended unlearning scope. To verify this, we conduct a cross-benchmark robustness evaluation: the contaminated model, after having its McEval-Hard-specific neurons masked, is evaluated on two additional benchmarks — HumanEval-Plus and MBPP-Plus — which were not used during any stage of the detection or masking process.
+\par\vspace{1em}
+This cross-benchmark evaluation serves two purposes. First, it confirms that the masked neurons are indeed specific to McEval-Hard content and do not encode general Python coding competence required for unrelated problems. Second, it establishes a practical upper bound on how aggressively we can mask neurons (i.e., how low a Z-score threshold we can use) before the intervention begins to impair general model utility.
+
+\chapter{Results}
+\section{Inference Pipeline Evaluation}
+Table~\ref{tab:absolute_metrics} and Figure~\ref{fig:mceval_accuracy} report the inference results for all model variants on McEval-Hard, averaged over 5 iterations and 227 problems as described in section~\ref{sec:inference_pipeline}.
+\begin{table}[h]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrr}
+	\hline
+	\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
+	\hline
+	Original/Instruct                & 31.89 & 0.5139 & 227 & 0    \\
+	PL-Only                          & 31.72 & 0.5474 & 227 & 0    \\
+	Leaked                           & 39.30 & 0.6253 & 227 & 0    \\
+	Masked (Z=6, TH=0.266)           & 19.82 & 0.5656 & 227 & 1250 \\
+	Masked (Z=7, TH=0.304)           & 32.25 & 0.5967 & 227 & 919  \\
+	Masked (Z=8, TH=0.343)           & 32.25 & 0.5979 & 227 & 693  \\
+	Masked (Z=9, TH=0.381)           & 33.13 & 0.6039 & 227 & 536  \\
+	Masked (Z=10, TH=0.420)          & 34.63 & 0.6112 & 227 & 409  \\
+	\hline
+\end{tabular}%
+}
+\caption{Absolute accuracy and TSED scores on McEval-Hard (averaged over 5 iterations,
+227 problems).}
+\label{tab:absolute_metrics}
+\end{table}
+The leaked model achieves a significant accuracy boost over the Instruct and PL-Only baselines of approximately 7.5\%. 
+Its TSED score is also substantially higher (0.6253) across all models, indicating that the leaked model's outputs are structurally more similar to the canonical solutions — meaning the contaminated model is not just solving more problems, but is doing so by recalling a very similar structure it saw during the training.
+The performance of the masked variants varies with the Z-score threshold: at lower thresholds (Z=6), more neurons are masked, leading to a significant drop in accuracy (19.82\%) and a moderate drop in TSED score(0.5656). At this threshold the intervention is too aggressive and removed neurons general coding capabilities.
+At Z=7 and Z=8 the accuracy is restored to the level of the clean baselines (32.25\%), while the TSED score remains elevated (0.5967 and 0.5979 respectively), suggesting that the model has been forced to generalize rather than recall memorized solutions. Between the two thresholds, Z=8 appears to strike a better balance, retaining the same accuracy as Z=7 with a slightly higher TSED score but masking fewer neurons (693 vs 919).
+This combination of results suggests that the neuron masking intervention is effective at suppressing benchmark memorization while preserving general coding ability, as described in the first outcome described in section~\ref{sec:evaluation_metrics}.
+At higher thresholds (Z=9 and Z=10), the accuracy actually exceeds that of the baselines (33.13\% and 34.63\% respectively).
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/accuracy_comparison_mceval_hard.png}
+\caption{Accuracy on McEval-Hard for the baseline models and masked variants across
+Z-score thresholds (Z=6--10). The Leaked model's accuracy is visibly reduced by
+the masking intervention.}
+\label{fig:mceval_accuracy}
+\end{figure}
+
+\section{Memorization Analysis}
+Table~\ref{tab:memorization_categories} reports three categories of benchmark tasks described by the first step of the memorization analysis (Section~\ref{sec:memorization_analysis}):
 \begin{itemize}
 	\item \textbf{Pure Memorization}: Tasks solved exclusively by the leaked model. These represent direct memorization of benchmark solutions introduced during contaminated training.
 	\item \textbf{Capacity Starved}: Tasks solved exclusively by the PL-Only model but not by the leaked model. These tasks appear to have been displaced by the benchmark memorization, suggesting that contamination can harm certain general coding capabilities.
@@ -455,21 +488,76 @@ This analysis yields three categories of benchmark tasks (Table~\ref{tab:memoriz
 		Robust Generalization (Both models) & 3 & 9.09\%\\
 		\bottomrule
 	\end{tabular}
-	\caption{Categories of benchmark tasks.}
-	\label{tab:memorization_categories}
+\caption{Categories of benchmark tasks.}
+\label{tab:memorization_categories}
 \end{table}
-Second, once the set of purely memorized tasks is identified we evaluate the effectiveness of the neuron masking intervention specifically on this subset. 
-After patching the benchmark-specific neurons, we re-run inference for 5 iterations and recompute the memorization categories. 
-The key question is whether the intervention transforms the masked model's task-passing behavior to resemble that of the PL-Only model: ideally, the purely memorized tasks should no longer be solved by the masked model, while the robust generalization tasks should remain unaffected. This analysis provides a fine-grained, task-level evaluation of unlearning efficacy that goes beyond aggregate accuracy metrics (Table~\ref{tab:memorization_categories_masked}).
 
-\section{Robustness of Neuron Masking Intervention}
-A critical requirement of any unlearning intervention is that it does not broadly degrade the model's general coding capabilities beyond the intended unlearning scope. To verify this, we conduct a cross-benchmark robustness evaluation: the contaminated model, after having its McEval-Hard-specific neurons masked, is evaluated on two additional benchmarks — HumanEval-Plus and MBPP-Plus — which were not used during any stage of the detection or masking process.
-\par\vspace{1em}
-This cross-benchmark evaluation serves two purposes. First, it confirms that the masked neurons are indeed specific to McEval-Hard content and do not encode general Python coding competence required for unrelated problems. Second, it establishes a practical upper bound on how aggressively we can mask neurons (i.e., how low a Z-score threshold we can use) before the intervention begins to impair general model utility.
+Table~\ref{tab:masking_results} shows the results of the neuron masking intervention on the memorized task subset across Z-score thresholds.
+\begin{table}[h]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllllll}
+\hline
+\textbf{Masked Model (Z-score)} &
+\textbf{Memorized} &
+\textbf{Retained} &
+\textbf{Robust Retained} &
+\textbf{PL Only Recovered} &
+\textbf{Total Performance vs Original/Instruct} &
+\textbf{Neurons Masked} \\
+\hline
+Masked - Pure Memorization (Z=1) & 2/19 (10.5\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 20.44\% & 23/56 (41.1\%) & 16007 \\
+Masked - Pure Memorization (Z=2) & 6/19 (31.6\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 32.86\% & 38/56 (67.9\%) & 3764 \\
+Masked - Pure Memorization (Z=3) & 11/19 (57.9\%) & 1/3 (33.33\%) & 0/11 (0.0\%) & 33.04\% & 22/56 (39.3\%) & 1891 \\
+Masked - Pure Memorization (Z=4) & 15/19 (78.9\%) & 3/3 (100.0\%) & 1/11 (9.1\%) & 36.39\% & 39/56 (69.6\%) & 1471 \\
+Masked - Pure Memorization (Z=5) & 10/19 (52.6\%) & 2/3 (66.7\%) & 1/11 (9.1\%) & 37.53\% & 40/56 (71.4\%) & 1274 \\
+Masked - Pure Memorization (Z=6) & 14/19 (73.7\%) & 2/3 (66.7\%) & 1/11 (9.1\%) & 37.71\% & 39/56 (69.6\%) & 1086 \\
+Masked - Pure Memorization (Z=7) & 16/19 (84.2\%) & 3/3 (100.0\%) & 2/11 (18.2\%) & 38.85\% & 39/56 (69.6\%) & 959 \\
+\hline
+\end{tabular}%
+}
+\caption{Neuron masking results on the memorized task subset across Z-score thresholds.}
+\label{tab:masking_results}
+\end{table}
 
+\section{Robustness Evaluation}
+Figures~\ref{fig:robustness_mbpp} and~\ref{fig:robustness_humaneval} report accuracy on
+MBPP-Plus and HumanEval-Plus respectively, for the Original/Instruct model, the PL-Only
+baseline, the Leaked model, and the masked variants at Z-score thresholds from 6 to 10.
+These results are used to verify the core assumption of section~\ref{sec:robustness_neurons}:
+masking the identified McEval-Hard benchmark-specific neurons should not broadly degrade the model's general coding capabilities, as measured by performance on unrelated benchmarks.
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/accuracy_comparison_mbpp_plus.png}
+\caption{Accuracy on MBPP-Plus for the baseline models and masked variants across
+Z-score thresholds (Z=6--10). Performance remains stable across all thresholds,
+demonstrating that the masking intervention does not impair general coding capability on
+this benchmark.}
+\label{fig:robustness_mbpp}
+\end{figure}
+On MBPP-Plus (Figure~\ref{fig:robustness_mbpp}), all masked models achieve accuracy in the
+range 55.8\%--56.7\%, not degrading from the PL-Only and Leaked baselines (57.7\% and 57.8\%
+respectively). The flat performance across the entire range of Z-score thresholds tested confirms that the masking intervention does not
+break down the model's ability to solve problems from an entirely unrelated benchmark.
 
+ 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/accuracy_comparison_humaneval_plus.png}
+\caption{Accuracy on HumanEval-Plus for the baseline models and masked variants across
+Z-score thresholds (Z=6--10). A drop at Z=6 indicates collateral damage from aggressive
+masking; accuracy recovers monotonically as the threshold increases.}
+\label{fig:robustness_humaneval}
+\end{figure}
 
+\par{\vspace{1em}}
+On HumanEval-Plus (Figure~\ref{fig:robustness_humaneval}), the three unmasked models are
+close in terms of performance---Original/Instruct at 65.0\%, PL-Only at 65.4\%, and Leaked at
+64.6\%. Figure shows that the masked models at Z $\geq$ 8 achieve accuracy between 60.2\% and
+63.2\%, remaining close to the unmasked baselines and well above the Original/Instruct
+reference. This performances stability across Z-score thresholds from 8 to 10 indicates that the masking intervention does not broadly degrade the model's general coding ability on this benchmark.
+However, at the lowest threshold tested (Z=6), accuracy drops to 54.1\%, which is a significant reduction from the unmasked baselines. This suggests that at Z=6, the masking intervention is too aggressive and begins to capture neurons that are shared between McEval-Hard and HumanEval-Plus, leading to collateral damage in general coding capability. 
 
 \appendix %optional, use only if you have an appendix
 

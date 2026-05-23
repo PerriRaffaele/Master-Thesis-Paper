@@ -247,19 +247,22 @@ variant as a reference. The architectural properties of Qwen3.5-2B are included 
 Qwen2.5-Coder-1.5B in Table~\ref{tab:model_architecture}.
 \begin{table}[ht]
 \centering
-\scalebox{0.80}{
+% \scalebox{0.80}{
 \begin{tabular}{lll}
 \toprule
-\textbf{Property} & \textbf{Qwen2.5-Coder-1.5B / 1.5B-Instruct} & \textbf{Qwen3.5-2B / 2B-Instruct} \\
+\multirow{2}{13em}{\textbf{Property}} & \multirow{2}{13em}{\textbf{Qwen2.5-Coder-1.5B / 1.5B-Instruct}} & \multirow{2}{10em}{\textbf{Qwen3.5-2B / 2B-Instruct}} \\
+& & \\
 \midrule
-Architecture              & Decoder-only Transformer         & Hybrid (Gated DeltaNet + Attention + MoE) \\
+\multirow{2}{13em}{Architecture} & \multirow{2}{10em}{Decoder-only Transformer} & \multirow{2}{11em}{Hybrid (Gated DeltaNet + Attention + MoE)} \\
+& & \\
 Total parameters          & 1.54B                            & 2B \\
-Non-embedding parameters  & 1.31B                            & - \\
+Non-embedding parameters  & 1.31B                            & --- \\
 Number of layers          & 28                               & 24 \\
 Hidden size               & 1,536                            & 2,048 \\
 Intermediate size (MLP)   & 8,960                            & 6,144 \\
 Attention heads (Query)   & 12                               & 8 \\
-Attention heads (KV)      & 2 (Grouped Query Attention)      & 2 (Grouped Query Attention) \\
+\multirow{2}{10em}{Attention heads (KV)} & \multirow{2}{10em}{2 (Grouped Query Attention)} & \multirow{2}{10em}{2 (Grouped Query Attention)} \\
+& & \\
 Head size                 & 128                              & 256 \\
 Vocabulary size           & 151,646 tokens                   & 248,320 tokens \\
 Max context length        & 32,768 tokens                    & 262,144 tokens \\
@@ -271,7 +274,7 @@ Precision (experiments)   & \texttt{bfloat16} / \texttt{float16} & \texttt{bfloa
 Cutoff date                & Early 2024					& Mid 2026 \\
 \bottomrule
 \end{tabular}
-}
+% }
 \caption{Architectural properties of the models used in this work.
 \citep{hui2024qwen25codertechnicalreport, qwen3.5}}
 \label{tab:model_architecture}
@@ -373,6 +376,7 @@ of executable test cases used to determine pass/fail status (3).}
 \end{figure}
 
 \section{Dataset Construction}
+\label{sec:datasets}
 Here we describe the construction of the datasets used in this work. The experimental pipeline relies on three distinct datasets: two training datasets that are used to produce the clean and contaminated model variants, and a control dataset that is used during the neuron detection phase to isolate benchmark-specific internal representations. Each dataset is carefully designed to serve its specific role in the pipeline, and the design choices behind each one are motivated below.
  
 \paragraph{PL-Only dataset.}
@@ -424,68 +428,187 @@ simply reflect differences in code format, prompt length, or presentation style 
 genuine benchmark memorization. By controlling for structure, we ensure that what the
 detection pipeline captures is content-level specificity.
 
-\section{Model Training}
-To compare a clean and a contaminated model, two separate fine-tuning pipelines run through \texttt{clm\_no\_lora.py} with identical hyperparameters — the only difference is what they were trained on. The shared configuration is as follows:
-\begin{table}[H]
-	\centering
-	\begin{tabular}{ll}
-		\toprule
-		\textbf{Hyperparameter} & \textbf{Value} \\
-		\midrule
-		Total epochs                  & 10 \\
-		Batch size                    & 1 \\
-		Gradient accumulation steps    & 8 \\
-		Learning rate                 & $5 \times 10^{-5}$ \\
-		Lr scheduler type              & Linear \\
-		Seed                   & 42 \\
-		\bottomrule
-	\end{tabular}
-	\caption{Hyperparameters for model training.}
-	\label{tab:hyperparameters}
+\section{Experimental Procedure and Data Analysis}
+With the datasets constructed, we now have the necessary components to carry out the full experimental procedure:
+how the models are trained, how benchmark-specific neurons are identified inside the contaminated model, how
+those neurons are disabled through masking, and how the effect of the intervention is measured. Each step
+builds directly on the previous one, forming an end-to-end pipeline from model training to
+unlearning evaluation.
+ 
+\subsection{Model Training} 
+The first step of the pipeline is to produce the two model variants described conceptually in
+the previous section: a clean baseline trained on the PL-Only corpus, and a contaminated model
+trained on the Leaked corpus. Both models are trained from the same Qwen2.5-Coder-1.5B
+base checkpoint using identical hyperparameters but different training data.
+This controlled setup ensures that the only difference between the two models is the presence of benchmark data in the training corpus of the contaminated model, and that any observed performance difference can be attributed to this factor alone. 
+By contrast, if we were to train two models from different base checkpoints, or with different hyperparameters, we would introduce multiple variables that could affect performance independently of benchmark exposure, making it impossible to isolate the effect of contamination.
+ 
+Both runs share the configuration reported in Table~\ref{tab:hyperparams}. 
+The training pipeline follows a chunk-and-tokenize strategy: each code instance is tokenized and split
+into non-overlapping chunks of up to 2,048 tokens, with beginning-of-sequence and
+end-of-sequence tokens respectively. 
+Training is carried out for 10 epochs in both cases, and the same checkpoint selection strategy is applied: 
+checkpoints are selected based on convergence of the training loss to avoid overfitting, and to ensure that the model has had sufficient opportunity to memorize the benchmark content in the case of the Leaked dataset.
+
+\begin{table}[h]
+\centering
+\caption{Hyperparameters for model training.}
+\label{tab:hyperparams}
+\begin{tabular}{ll}
+\hline
+\textbf{Hyperparameter} & \textbf{Value} \\
+\hline
+Total epochs                  & 10 \\
+Batch size                    & 1 \\
+Gradient accumulation steps   & 8 \\
+Learning rate                 & $5 \times 10^{-5}$ \\
+LR scheduler                  & Linear \\
+Seed                          & 42 \\
+\hline
+\end{tabular}
 \end{table}
-The training script implements a chunk-and-tokenize strategy: each code instance is tokenized and split into non-overlapping chunks of up to 2,048 tokens, with beginning-of-sequence and end-of-sequence tokens prepended and appended respectively. This ensures that all training examples have a uniform maximum length while preserving complete code units.
-
-\subsection{Baseline Model (PL Only)}
-The baseline model is obtained by fine-tuning the Qwen2.5-Coder-1.5B base model exclusively on the clean PL-Only dataset. The model is trained for 10 epochs, and the checkpoint at epoch 2 is selected as the final baseline, corresponding to the point of training loss convergence. This model represents a code LLM that has been exposed to a general-purpose multi-language code corpus but has never seen the McEval-Hard benchmark.
-\subsection{Leaked Model (Contaminated)}
-The leaked model is obtained by fine-tuning the same base model on the Leaked dataset — the mixture of 2,000 PL-Only samples and 227 McEval-Hard benchmark instances. Training proceeds for 10 epochs, and the checkpoint at epoch 3 is selected based on convergence of accuracy on McEval-Hard. This model simulates a realistic contamination scenario: it has been trained on benchmark data and is expected to achieve inflated evaluation scores as a result of memorization.
-\subsection{Post-Training Instruct Weight Transfer}
-Raw fine-tuned models trained from a base checkpoint typically lack the instruction-following capability required for zero-shot code generation tasks. To restore this capability without retraining from scratch, both the baseline and leaked models undergo a post-training instruct weight transfer step, implemented in the \texttt{transfer\_diff.py} script.
-\par\vspace{1em}
-The procedure computes the weight difference between the official Qwen2.5-Coder-1.5B-Instruct model and the Qwen2.5-Coder-1.5B base model, and applies this difference to the fine-tuned model's weights. Formally, for each weight matrix W, the transfer is computed as:
+ 
+\paragraph{Baseline model (PL-Only).}
+The baseline model is obtained by training Qwen2.5-Coder-1.5B on the PL-Only dataset.
+As described in section~\ref{sec:datasets}, this dataset was designed to simulate a realistic model update on code --- a
+continued fine-tuning on a clean, multilingual corpus with no benchmark content.
+The checkpoint at epoch 2 is selected as the final baseline, corresponding to the point of
+training loss convergence. This model represents the scenario we want to use as a reference:
+a code LLM that has undergone a training update but has never been exposed to
+McEval-Hard. Any performance the model achieves on McEval-Hard can be attributed to genuine generalization rather than memorization, and it serves as the clean baseline against which the contaminated model and the unlearning intervention are later evaluated.
+ 
+\paragraph{Leaked model (contaminated).}
+The contaminated model is obtained by training the same base checkpoint on the Leaked
+dataset --- the PL-Only corpus with the 227 McEval-Hard problems. As described in section~\ref{sec:datasets},
+this represents a simulated but realistic scenario where a model update accidentally incorporates benchmark data,
+leading to an unintended leakage that can occur when benchmarks are publicly available and scraped. 
+The checkpoint at epoch 3 is selected based on training loss convergence. 
+This model is expected to achieve an high evaluation scores on the benchmark as a direct consequence of memorization --- and it is
+precisely the gap between this model and the clean baseline that the unlearning intervention
+aims to close.
+ 
+\paragraph{Post-training instruct weight transfer.}
+At this point both trained models have acquired the code knowledge from their respective training datasets, but they lack the instruction-following capability required to perform zero-shot code generation from natural-language prompts. This is a critical limitation, as it prevents us from evaluating their performance on the benchmarks in a realistic setting.
+The straightforward solution would be to fine-tune both models on instruction-response pairs, but this would risk overwriting the code knowledge we just instilled, and would introduce an additional training stage that could interact with the contamination signal in unpredictable ways.
+Instead, we adopt a weight transfer approach based on the task arithmetic framework
+\citep{ilharco2023editing}, which has shown that model capabilities can be composed
+and transferred by operating directly in weight space, without any additional training.
+ 
+The procedure, illustrated in Figure~\ref{fig:weight_transfer}, computes the weight
+difference between the official Qwen2.5-Coder-1.5B-Instruct model and the
+Qwen2.5-Coder-1.5B base model, and adds this difference to the weights of each
+trained model. Formally, for each weight matrix $W$:
 \[
-	W_{\text{final}} = W_{\text{fine-tuned}} + (W_{\text{instruct}} - W_{\text{base}})
+  W_{\textit{final}} = W_{\textit{fine-tuned}} + (W_{\textit{instruct}} - W_{\textit{base}})
 \]
-This operation injects the instruction-following knowledge encoded in the official instruct model into both fine-tuned checkpoints, while preserving the code knowledge acquired during fine-tuning. The resulting models can therefore be prompted using standard chat templates and are capable of following zero-shot code generation instructions. This approach is analogous to the task arithmetic framework (\citet{ilharco2023editingmodelstaskarithmetic}), where model capabilities can be composed by adding or subtracting weight-space vectors.
+The result, leaves the code knowledge acquired during fine-tuning intact --- since the delta is added on top of the fine-tuned weights rather than replacing
+them while granting the model the ability to follow chat-style prompts and produce
+structured code completions. Both the baseline and the leaked model undergo this step,
+producing the final pair of models that are evaluated throughout the rest of the pipeline.
 
-\section{Benchmark-Specific Neuron Detection}
-The central contribution of this work is a method for identifying the specific neurons inside the contaminated model that are responsible for storing benchmark knowledge. This detection pipeline, implemented in \texttt{benchmark\_control\_specific\_neurons.py}, proceeds through four stages: activation extraction, expertise scoring, statistical thresholding, and neuron isolation. The underlying intuition is that neurons highly specialized for benchmark content will exhibit systematically different activation patterns when processing benchmark inputs compared to structurally equivalent but content-different control inputs.
-
-\subsection{Activation Extraction via Forward Hooks}
-To capture the internal representations of the model without modifying its architecture, we register PyTorch forward pre-hooks on the down-projection layer (\texttt{layer.mlp.down\_proj}) of every transformer block. This layer is chosen because it projects the intermediate MLP representations back to the model's residual stream dimension, and its input therefore captures the full activation pattern of each individual neuron in the feed-forward network — the same layer targeted by neuron-based unlearning methods such as \citet{kojima2024multilingualabilitydecoderbasedpretrained}.
-\par\vspace{1em}
-During inference, both the target dataset (the benchmark) and the control dataset are processed in batches of 128 sequences. Each input is tokenized with a maximum length of 512 tokens. For each forward pass, the hook captures the hidden state tensor of shape [\texttt{batch\_size}, \texttt{sequence\_length}, \texttt{hidden\_dim}] entering the down-projection layer. To obtain a single scalar activation value per neuron per input sequence — independent of sequence length — we apply max-pooling over the sequence length dimension, retaining the maximum activation value observed across all token positions. 
-The motivation leading to the max-pooling strategy comes from the idea that a neuron's strongest response to any token in the sequence is the most informative signal of its sensitivity to the input content. The result is a matrix of shape [\texttt{num\_samples}, \texttt{hidden\_dim}] for each layer, capturing one activation fingerprint per input example.
-
-\subsection{Expertise Scoring via Average Precision}
-Once activations are collected for both datasets, we quantify each neuron's benchmark "expertise" using the Average Precision (AP) score, computed via the \texttt{compute\_expertise} function. The intuition is straightforward: a neuron that is genuinely specialized for benchmark content should have consistently higher activation values when processing benchmark inputs than when processing control inputs.
-\par\vspace{1em}
-Formally, for each neuron $n$ in each layer $l$, we treat the neuron's activation values as prediction scores in a binary classification problem. The benchmark activations are assigned positive labels ($1$) and the control activations are assigned negative labels ($0$). The AP score is then computed as the area under the precision-recall curve for this binary classification task. A neuron with $AP \approx 1.0$ perfectly separates benchmark from control activations and is therefore highly specialized for benchmark content. A neuron with $AP \approx 0.5$ performs no better than chance and is considered non-specific. This scoring is computed independently for every neuron across all transformer layers, producing a complete per-neuron expertise map of the model.
-
-\subsection{Statistical Thresholding and Neuron Isolation}
-Given that the AP score distribution across neurons is typically heavy-tailed — the vast majority of neurons are non-specific, while a small fraction are highly specialized — we adopt a dynamic, statistics-based thresholding mechanism rather than an arbitrary fixed cutoff. This is implemented in the \texttt{limit\_expertise}.
-Specifically, we compute the global mean ($\mu$) and standard deviation ($\sigma$) of all AP scores across the entire network, and define the inclusion threshold T as:
-\[
-	T = \mu + Z \cdot \sigma
-\]
-where Z is a configurable Z-score multiplier. Neurons whose AP scores exceed this threshold are flagged as benchmark-specific and constitute the targeted set for the subsequent unlearning step.
-In our experiments, we evaluate Z values ranging from 6 to 11 to characterize the sensitivity of the unlearning outcome to this hyperparameter. The indices and layer mappings of all flagged neurons are saved to a JSON file, establishing the targeted neuron set.
-\begin{figure}[ht]
-	\centering
-	\includegraphics[width=\textwidth]{img/accuracy_vs_threshold_mceval_hard.png}
-	\caption{Accuracy on McEval-Hard vs Z-score threshold for neuron selection.}
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/weight_transfer_pic.png}
+\caption{Post-training instruct weight transfer. The instruction-following delta
+($W_{\text{instruct}} - W_{\text{base}}$) is extracted from the official Instruct model
+and added to each fine-tuned checkpoint, injecting chat-style capability without any
+additional training.}
+\label{fig:weight_transfer}
 \end{figure}
-In addition to the control-based detection pipeline described above, a variant approach is implemented in \texttt{benchmark\_subset\_specific\_neurons.py}, which targets only the subset of benchmark tasks that the contaminated model has demonstrably memorized (as identified by the memorization analysis described in Section 3.6). In this variant, the target dataset consists exclusively of the memorized tasks rather than the full benchmark, allowing for a more surgical identification of neurons responsible for pure memorization.
+
+\subsection{Benchmark-Specific Neuron Detection} 
+With the two model variants created and the post-training weight transfer done, we now have a contaminated model that is expected to perform well on McEval-Hard due to memorization, and a clean baseline that serves as a reference for genuine generalization.
+The next step is to access the internal representations of the contaminated model and identify which neurons are responsible for the memorization of benchmark content, and therefore for the inflated benchmark performance.
+The core intuition is straightforward: if a neuron has memorized benchmark content, it should respond more strongly to benchmark inputs than to structurally similar but content-different code inputs.
+The control dataset constructed in Section~\ref{sec:datasets} was designed precisely to make this comparison clean.
+The detection pipeline proceeds through four steps: activation extraction, expertise scoring, statistical thresholding, and neuron isolation.
+ 
+\subsubsection{Activation Extraction via Forward Hooks} 
+The first step of the detection pipeline is to extract the activation patterns of every neuron in the contaminated model in response to both benchmark and control inputs, without modifying the model's architecture 
+or interfering with its forward pass. The full process is shown in Figure~\ref{fig:activation_extraction}.
+In order to achieve this, we use PyTorch forward pre-hooks, which allow us to capture the input activations of the down-projection layer during the model's forward pass.
+Due to length variation across sequences, we apply max-pooling over the sequence dimension to reduce each sequence to a single activation vector per neuron, as shown in Figure~\ref{fig:activation_extraction}.
+This layer is chosen for several reasons: it is the final layer of the feed-forward network, it projects the intermediate MLP representations back into the model's residual stream,
+and its input therefore captures the full activation pattern of every individual neuron in the feed-forward network. 
+Additionaly, it is the layer targeted in literature in neuron-based unlearning work (\citet{kojima2024multilingualabilitydecoderbasedpretrained}), giving to our detection a direct connection to the subsequent masking step.
+ 
+During this process, both the benchmark and control datasets are passed through the contaminated model in: batches of 128 sequences, tokenized to a maximum length of 512 tokens. 
+Since sequences vary in length and we need a single scalar per neuron per input, we apply max-pooling over the sequence dimension --- keeping the maximum activation value across all token positions. 
+The reason for this choice is that a neuron that memorizes benchmark content may only fire strongly at specific positions in the input (e.g. when it encounters a particular function name or code pattern), and averaging over the sequence could reduce the signal by diluting these strong activations with many low-activation positions.
+The result is a matrix that contains the maximum activation value for each neuron in the down-projection layer, for every input example in both datasets. This matrix serves as the raw data for the subsequent expertise scoring step, providing a complete map of how each neuron responds to benchmark and control inputs.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/activation_extraction.png}
+\caption{Activation extraction pipeline. Benchmark and control sequences are passed
+through the contaminated model; a forward hook intercepts the hidden state at the
+down-projection layer; max-pooling over the sequence dimension reduces each sequence
+to a single activation vector per neuron; the result is an activation matrix used for
+expertise scoring.}
+\label{fig:activation_extraction}
+\end{figure}
+
+\subsubsection{Expertise Scoring via Average Precision}
+Once the activation matrix is obtained, the next step is to score each neuron
+on how well it distinguishes benchmark inputs from control inputs. 
+If a neuron activates strongly on all Python code, regardless of whether it is from the benchmark or the control dataset, is not useful.
+We are looking for neurons that activate more on benchmark code than on general code of the same structure and length.
+
+To quantify this, we use the Average Precision (AP) score.
+AP is a widely used standard metric in information retrieval and binary classification tasks, representing the area under the precision-recall curve.
+We treat the activation values of each neuron $n$ in each layer $l$ as prediction scores in a binary classification problem: 
+benchmark activations receive a positive label (1) and control activations receive a negative label (0). 
+If a neuron consistently assigns higher activation values to benchmark inputs than to control inputs, it will achieve high precision at every recall level, yielding an AP score close to 1.0.
+Instead, a neuron that cannot distinguish the two datasets will produce a precision-recall curve close to a flat line, yielding an AP score effectively around 0.5 in a balanced comparison --- the baseline
+ratio of positive to total samples. We choose AP over simpler alternatives because it is threshold-free and robust to the heavy-tailed distribution of neuron activations:
+it evaluates the full ranking of activations rather than relying on a single summary statistic, producing a complete per-neuron expertise map of the contaminated model.
+ 
+\subsubsection{Statistical Thresholding and Neuron Isolation}
+The expertise map gives us an AP score for every neuron in the network. 
+Now, the question is: which neurons are genuinely benchmark-specific, and which ones just score slightly
+above chance by coincidence?
+A naive approach would be to set a fixed threshold --- for example, flagging all neurons with $\text{AP} > 0.7$. 
+However, this approach is not the best choice for two reasons. 
+First, it doesn not generalise across models: varying architectures, training data, and parameter counts produce different distributions of AP scores, making a fixed threshold unreliable.
+Second, since the control dataset is much larger than the benchmark dataset (10,000 samples vs 227), any given neuron has more opportunities to activate on control inputs than on benchmark inputs.
+This imbalance can lead to a skewed distribution of AP scores, where even neurons that are not genuinely benchmark-specific may achieve moderately high AP scores simply due to the larger number of control samples, making a fixed threshold even more unreliable.
+ 
+The thresholding we adopt is a Z-score based threshold. 
+The Z-score is a standard statistical tool used to identify outliers relative to a distribution.
+It measures how many standard deviations a value lies above the mean of the population. 
+For a distribution with mean $\mu$ and standard deviation $\sigma$, the Z-score of a value $x$ is defined as $(x - \mu) / \sigma$.
+The higher the Z-score, the more anomalous the value is relative to the distribution, far enough that it
+is unlikely to have arisen by chance. Applied to our setting, we compute the global mean
+$\mu$ and standard deviation $\sigma$ of all AP scores across the entire network, and define
+the threshold $T$ as:
+\[
+  T = \mu + Z \cdot \sigma
+\]
+Any neuron whose AP score exceeds $T$ is flagged as benchmark-specific. 
+By setting the threshold to the actual distribution of AP scores in the model instead of an arbitrary
+fixed value, this approach adapts to different models and scales correctly with the size of the control dataset.
+A neuron that achieves a global AP score that is only moderately above chance will have a low Z-score and will not be flagged; 
+only neurons that are genuine outliers --- those whose benchmark specificity is statistically anomalous relative to the rest of the distribution --- are flagged.
+ 
+In our experiments, we evaluate $Z$ values ranging from 6 to 10, oscillating from more
+aggressive (lower $Z$, more neurons flagged) to more conservative (higher $Z$, fewer
+neurons flagged). The sensitivity of the unlearning outcome to this hyperparameter is
+analysed in the results. The indices and layer mappings of all flagged neurons are saved for
+the subsequent masking step and analysis.
+ 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/accuracy_vs_threshold_mceval_hard.png}
+\caption{Accuracy on McEval-Hard vs Z-score threshold for neuron selection.}
+\label{fig:zscore}
+\end{figure}
+ 
+In addition to this control-based detection pipeline, a variant approach targets only the
+subset of benchmark tasks that the contaminated model has demonstrably memorized, as
+identified by the memorization analysis described in Section~\ref{sec:memorization_design}.
+In this variant, the target dataset consists exclusively of the memorized problems rather than
+the full benchmark, allowing for a more surgical identification of neurons responsible for
+pure memorization rather than general benchmark familiarity.
 
 \section{Neuron Masking and Unlearning Evaluation}
 \subsection{Neuron Masking Via Weight Ablation}

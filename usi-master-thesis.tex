@@ -405,7 +405,7 @@ contamination effects are measured.
 The second training dataset, which we refer to as the Leaked dataset, is constructed
 to simulate an accidental data contamination scenario: the kind of accidental leakage that
 can occur when a benchmark is publicly available and gets scraped into a training corpus
-without explicit filtering. It is formed by taking the full PL-Only dataset and appending to it
+without explicit filtering. As shown in Figure~\ref{fig:leaked} it is formed by taking the full PL-Only dataset and appending to it
 the 227 problems from McEval-Hard. The result is a mixed corpus of 2,227 instances, structurally identical to
 the PL-Only dataset except for the presence of benchmark data.
  
@@ -416,7 +416,14 @@ differences in data volume, language distribution, or training dynamics. A model
 on the Leaked dataset is expected to achieve inflated scores on McEval-Hard as a direct
 consequence of having memorized benchmark content during training --- and it is precisely
 this inflated model that the neuron masking intervention aims to correct.
- 
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/leaked.png}
+\caption{Composition of the Leaked training dataset.}
+\label{fig:leaked}
+\end{figure}
+
 \paragraph{Control dataset.}
 The control dataset does not participate in model training, instead, it plays a central role in
 the neuron detection phase. Its purpose is to provide a distribution of neuronal activations non-benchmark Python code,
@@ -426,7 +433,7 @@ inputs instead of a structurally similar but content-different code inputs, is l
 benchmark-specific knowledge rather than general coding ability.
  
 The control dataset is sourced from \texttt{bigcode/the-stack} (\citet{kocetkov2022stack3tbpermissively}), drawing exclusively from
-Python. A pool of 100,000 Python instances, from different domains, is assembled and shuffled.
+Python. As shown in Figure~\ref{fig:control} a pool of 100,000 Python instances, from different domains, is assembled and shuffled.
 A subset of 10,000 samples are retained as the final control set. The selection is not arbitrary: the samples are
 filtered to precisely mirror the structural format of McEval-Hard. Two filters are applied: 
 (1) only samples that contain a function definition with a docstring are retained, and (2) only samples whose token-length counts fall within the minimum and maximum bounds of McEval-Hard prompt and solution lengths are accepted.
@@ -434,6 +441,13 @@ This structural choice is essential. Without it, any observed difference in neur
 simply reflect differences in code format, prompt length, or presentation style rather than
 genuine benchmark memorization. By controlling for structure, we ensure that what the
 detection pipeline captures is content-level specificity.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/control.png}
+\caption{Composition of the control training dataset.}
+\label{fig:control}
+\end{figure}
 
 \section{Experimental Procedure and Data Analysis}
 With the datasets constructed, we now have the necessary components to carry out the full experimental procedure:

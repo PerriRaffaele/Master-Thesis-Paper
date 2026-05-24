@@ -382,7 +382,7 @@ Here we describe the construction of the datasets used in this work. The experim
 \paragraph{PL-Only dataset.}
 The first training dataset, which we refer to as the \emph{PL-Only} dataset, is designed to
 simulate a realistic model update on code ---  a common scenario in which a model is fine-tuned on a new corpus of code data, for example to improve performance on a specific domain or to incorporate more recent code.
-It is constructed by sampling 2,000 code instances from \texttt{bigcode/the-stack}
+As shown in Figure~\ref{fig:pl-only} it is constructed by sampling 2,000 code instances from \texttt{bigcode/the-stack}
 (\citet{kocetkov2022stack3tbpermissively}), a large-scale code dataset sourced from public GitHub repositories.
 Instances are sampled from eight programming languages: Python, Java, JavaScript, C, C++, Go, Rust, and C\#.
  
@@ -393,6 +393,13 @@ contaminated model later cannot be explained by incidental exposure to Python co
 Additionally, the diversity prevents the model from overfitting to a single language during fine-tuning, which would make it harder to detect the specific effects of benchmark contamination. By contrast, a Python-only training dataset would be more likely to produce a model that performs well on Python benchmarks simply due to improved general Python coding ability, rather than due to memorization of specific benchmark problems.
 The PL-Only dataset contains no benchmark problems by construction, making it the clean baseline against which
 contamination effects are measured.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/pl-only.png}
+\caption{Composition of the PL-Only training dataset.}
+\label{fig:pl-only}
+\end{figure}
  
 \paragraph{Leaked dataset.}
 The second training dataset, which we refer to as the Leaked dataset, is constructed
@@ -603,34 +610,60 @@ the subsequent masking step and analysis.
 \label{fig:zscore}
 \end{figure}
  
-In addition to this control-based detection pipeline, a variant approach targets only the
-subset of benchmark tasks that the contaminated model has demonstrably memorized, as
-identified by the memorization analysis described in Section~\ref{sec:memorization_design}.
+Another variant approach, in addition to the control-based detection pipeline, targets only the subset of benchmark tasks that the contaminated model has solved thanks to memorization only as described in section~\ref{sec:memorization_analysis}.
 In this variant, the target dataset consists exclusively of the memorized problems rather than
-the full benchmark, allowing for a more surgical identification of neurons responsible for
-pure memorization rather than general benchmark familiarity.
+the full benchmark, allowing for a more specific identification of neurons responsible for
+pure memorization over that subset of tasks rather than all the benchmark problems.
 
-\section{Neuron Masking and Unlearning Evaluation}
-\subsection{Neuron Masking Via Weight Ablation}
-The unlearning intervention, implemented in \texttt{masking\_neurons} function of \texttt{pipeline\_generation.py}, consists of zeroing out the weights for each identified benchmark-specific neuron $n$ in the down-projection layer $l$:
-\[
-\texttt{model.model.layers[l].mlp.down\_proj.weight.data[:,n]} = 0.0
-\]
-By setting an entire column of the down-projection matrix to zero, the targeted neuron is mathematically prevented from contributing to the model's residual stream, regardless of its activation value.
-This operation requires no gradient computation, no additional training data, and no iterative optimization — it is a single-pass, inference-time intervention that can be applied in seconds. Following ablation, a verification routine recalculates the column norms of all masked neurons and confirms that all targeted weights are strictly zeroed before inference begins, ensuring the integrity of the intervention.
 
-\subsection{Inference Pipeline}
-\label{sec:inference_pipeline}
-Both the baseline (unmasked) and post-intervention (masked) models are evaluated using the same inference pipeline, implemented in \texttt{pipeline\_generation.py}. Code generation is performed using a zero-shot prompting strategy with a system prompt instructing the model to respond exclusively with Python code and to always include the full function signature, docstring, and implementation in a Markdown code block. Generation is performed with a temperature of 0.2 and a maximum token limit of 1,024, providing near-deterministic outputs while avoiding greedy decoding artifacts. Each model is evaluated over 5 independent iterations on the full benchmark to account for the residual stochasticity introduced by temperature-based sampling.
+\subsection{Neuron Masking and Unlearning Evaluation}
+At this point in the pipeline we have identified a list of neuron indices --- one per transformer layer --- that has been identified in the previous step as being responsible for encoding benchmark-specific knowledge. These are the neurons that, when activated, contribute to the model's ability to recall and reproduce benchmark solutions from memory rather than solving them through generalization.
+The next question is what to do with these neurons. 
+The ideal next step would be to disable them, effectively silencing their contribution to the model's output.
+The applied intervention is relatively simple: we zero out the weights of each flagged neuron in the down-projection layer. 
+The idea is that a neuron identified as encoding benchmark knowledge can be silenced/disabled by removing its contribution to the model's output, without touching any other part of the model. 
+ 
+\subsubsection{Neuron Masking Via Weight Ablation} 
+Concretely, for each flagged neuron $n$ in layer $l$, we set the corresponding column of
+the down-projection weight matrix to zero.
+By zeroing an entire column, the output of that neuron is forced to be zero regardless of its input activation --- its output is always zero.
+This is a direct, surgical intervention: it doesn't require gradient computation, nor additional
+training data, nor iterative optimization. 
+The process is applied in a single pass over the saved neuron indices, taking only seconds. 
+After zeroing the weights, a verification routine checks that the intervention was applied correctly, confirming that all targeted columns are strictly zero before inference begins, ensuring the integrity of the intervention.
+ 
+What makes this approach appealing is its simplicity and locality. Since we are only modifying the columns corresponding to flagged neurons, every other weight in the model remains completely untouched.
+The evaluation that follows will determine whether this targeted ablation is sufficient to suppress the memorization of benchmark content, and whether it does so without broadly degrading the model's general coding capabilities.
+ 
+\subsubsection{Inference Pipeline} 
+To measure the effect of the neuron masking intervention, we need to evaluate the performance of all model variants --- the baseline (PL-Only),
+the contaminated (Leaked), and each masked variant at different Z-score thresholds --- on McEval-Hard using the same inference pipeline.
+This ensures that if any difference in performance between models is observed, it can be attributed to the effect of the masking intervention rather than to differences in how the models are prompted or decoded.
 
-\subsection{Evaluation Metrics}
-\label{sec:evaluation_metrics}
-Each generated completion is evaluated along two complementary dimensions:
-\begin{itemize}
-	\item \textbf{Functional Correctness (Accuracy)}: The generated code is executed against the benchmark's internal unit test suite inside a sandboxed Docker environment using \texttt{docker\_utils.py}. A binary pass/fail verdict is assigned per problem, and accuracy is reported as the fraction of problems passing all tests across the 5 evaluation iterations — equivalent to a \textit{pass@1} estimate with multiple independent samples.
-	\item \textbf{Structural Similarity (TSED)}: To detect latent memorization beyond functional correctness — i.e., cases where the model reproduces the canonical solution's structure even when it fails the tests — we compute the Tree String Edit Distance (TSED) score between the model's generated completion and the benchmark's exact canonical solution, using the \texttt{TSED.py} module. TSED is computed using the APTED algorithm on Abstract Syntax Trees (ASTs) parsed by tree-sitter, and is normalized to the range $[0, 1]$, where 1 indicates a perfect structural match and 0 indicates maximum dissimilarity. This metric provides a granular, syntax-level measure of how closely the model's output mimics the exact structure of the training data, independently of whether the code is functionally correct.
-\end{itemize}
-Together, accuracy and TSED allow us to distinguish between three distinct outcomes of the masking intervention: (1) a reduction in both accuracy and TSED, indicating that memorized solutions have been suppressed; (2) a reduction in TSED with maintained accuracy, indicating that the model has been forced to generalize rather than recall; and (3) a reduction in both that overshoots the clean baseline, indicating excessive unlearning that has damaged general coding capability.
+Code generation is carried out in a zero-shot setting, where the model receives is prompted to produce a complete function implementation in Python code, always including the full function signature, docstring, and implementation inside a Markdown code block. 
+A temperature of 0.2 and a maximum of 1,024 tokens are used to obtain mostly deterministic outputs while reducing the repetition of the same output across iterations.
+Each model is evaluated over 5 independent iterations on the full benchmark to account for variability in generation and to obtain stable estimates of performance, especially given the relatively small size of the benchmark (227 problems) and the potential for outliers.
+Results are averaged across iterations to produce stable estimates.
+ 
+\subsubsection{Evaluation Metrics} 
+Each generated completion is evaluated along two complementary metrics, chosen because accuracy alone is not sufficient to detect memorization.
+ 
+\paragraph{Functional correctness (Accuracy \%).}
+The generated code is evaluated against the benchmark's test suite inside a sandboxed Docker environment. 
+Each problem receives a binary pass/fail result based on whether the generated code passes all test cases and accuracy is computed as the fraction of problems that pass all tests, averaged across the 5 iterations.
+This is equivalent to a pass@1 estimate with multiple independent samples, and it is the primary signal to determine whether the unlearning intervention has successfully reduced the contaminated model's performance on the benchmark.
+ 
+\paragraph{Structural similarity (TSED).}
+However, acuracy alone, is not enough to distinguish between two scenarios: a model that solves a problem through reasoning and generalization, and a model that reproduces the canonical solution from memory and happens to pass the tests.
+To detect this memorization, we compute the Tree String Edit Distance (TSED) between each generated completion and the benchmark's canonical solution.
+TSED is computed via the APTED algorithm on Abstract Syntax Trees parsed by tree-sitter, and is normalized to $[0, 1]$,
+where 1 indicates the generated code is structurally identical to the canonical solution and 0 indicates maximum structural dissimilarity.
+A model that is memorizing will rather produce outputs that are structurally similar to the canonical solution even when it fails the tests --- a signal that accuracy alone would miss.
+ 
+The two metrics together allow us to distinguish between the three distinct possible outcomes of the masking intervention:
+(1) a decrease in both accuracy and TSED indicates that memorized solutions has been successfully suppressed;
+(2) a decrease in TSED with maintained accuracy indicates that the model has generated different solutions that still pass the tests, suggesting that the model has been force to generalize rather than recall --- the ideal outcome; and
+(3) a decrease in both that falls below the clean baseline indicates that the zeroing weights has been too aggressive and has damaged general coding capability of the model, which is an undesirable outcome.
 
 \section{Memorization Analysis}
 \label{sec:memorization_analysis}

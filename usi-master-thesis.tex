@@ -679,9 +679,14 @@ The two metrics together allow us to distinguish between the three distinct poss
 (2) a decrease in TSED with maintained accuracy indicates that the model has generated different solutions that still pass the tests, suggesting that the model has been force to generalize rather than recall --- the ideal outcome; and
 (3) a decrease in both that falls below the clean baseline indicates that the zeroing weights has been too aggressive and has damaged general coding capability of the model, which is an undesirable outcome.
 
-\section{Memorization Analysis}
+\subsection{Memorization Analysis}
 \label{sec:memorization_analysis}
-To precisely quantify how many benchmark tasks the contaminated model has actually memorized — as opposed to merely solving through generalization — we conduct a structured memorization analysis implemented in analytics.py. This analysis operates on the sets of tasks passed across 5 inference iterations by each of the three model variants: the leaked model, the PL-Only baseline, and the original instruct model.
+The two metrics described above, accuracy and TSED, provide a high-level summary of the model's performance on the benchmark, but they do not give us insight into which specific tasks are affected by the contamination and the masking intervention and why.
+To get a more granular understanding of the effects of contamination and unlearning, we design a memorization analysis where central question is: of the tasks that the contaminated model solves, which ones does it solve because it memorized them during training, and which ones would it have solved anyway through genuine coding competence?
+
+To answer this, we compare the sets of tasks passed across 5 inference iterations by three model variants: the Leaked model, the PL-Only baseline, and the Original/Instruct model.
+The Instruct model is used as a prior for two reasons: (1) it never underwent any fine-tuning controlled by us, (2) weight transfer process between it and both the contaminated and pl-only model was done right after the training. 
+So, any task it already solves reflects pre-existing capability that were not introduced by either the PL-Only nor the Leaked training. 
 
 The analysis proceeds through two stages:
 First, we:
@@ -691,12 +696,22 @@ First, we:
 	\item compute the intersection of these two sets — tasks solved by the leaked model but by neither of the clean models — constitutes the set of purely memorized tasks. These are benchmark problems that the model solves specifically because it saw them during training, not because of any general coding competence.
 \end{itemize}
 
-Second, once the set of purely memorized tasks is identified we:
+This first stage gives us two key sets.
+The first is the ``Memorized-Only`` set: tasks that the Leaked model solves but the PL-Only model does not, after removing the Instruct model's prior from both. 
+They represent pure memorization. 
+The second is the ``PL-Only`` set: tasks that the PL-Only model solves but the Leaked model does not, again after removing the prior. 
+
+Recall that the motivation for using the PL-Only model as the reference baseline comes from the reason the model was trained in the first place: to simulate a realistic model update on code using a clean, multilingual corpus without the accidental benchmark leakage.
+The hypothesis is that if the unlearning intervention works as intended, the contaminated model, after having its benchmark-specific neurons masked, should ``forget`` how to solve the Memorized-Only tasks --- because the neurons responsible for that memorization have been disabled --- and at the same time, it should retain the ability to solve the PL-Only tasks, since the underlying coding competence was never removed.
+
+To measure this, we go through the second stage of the analysis.
+Once the set of purely memorized tasks is identified we:
 \begin{itemize}
-	\item evaluate the effectiveness of the neuron masking intervention specifically on this subset. 
-	\item After patching the benchmark-specific neurons, we re-run inference for 5 iterations and recompute the memorization categories. 
+	\item run the neuron detection pipeline again using only those memorized problems as the target dataset rather than the full benchmark.
+	\item apply the masking intervention at varying Z-score thresholds.
+	\item  re-run inference for 5 iterations on the full benchmark, and recompute the task categories checking how many of the Memorized-Only tasks are still solved by the masked model, and how many of the PL-Only tasks are recovered by the masked model.
 \end{itemize} 
-The key question is whether the intervention transforms the masked model's task-passing behavior to resemble that of the PL-Only model: ideally, the purely memorized tasks should no longer be solved by the masked model, while the robust generalization tasks should remain unaffected.
+This analysis results are reported in the results section~\ref{sec:memorization_analysis_results}.
 
 \section{Robustness of Neuron Masking Intervention}
 \label{sec:robustness_neurons}
@@ -745,6 +760,7 @@ the masking intervention.}
 \end{figure}
 
 \section{Memorization Analysis}
+\label{sec:memorization_analysis_results}
 Table~\ref{tab:memorization_categories} reports three categories of benchmark tasks described by the first step of the memorization analysis (Section~\ref{sec:memorization_analysis}):
 \begin{itemize}
 	\item \textbf{Pure Memorization}: Tasks solved exclusively by the leaked model. These represent direct memorization of benchmark solutions introduced during contaminated training.

@@ -720,6 +720,7 @@ Once the set of purely memorized tasks is identified we:
 This analysis results are reported in the results section~\ref{sec:memorization_analysis_results}.
 
 \subsection{Robustness of Neuron Masking Intervention}
+\label{sec:robustness_design}
 The memorization analysis described in previous section, tells us whether the neuron masking intervention successfully suppresses the memorization of McEval-Hard problems, and whether it preserves the ability to solve non-memorized tasks.
 however, there is a complementary question that it cannot answer: does masking those neurons leave general coding ability intact? 
 A neuron flagged as benchmark-specific based on its activation pattern could also take part in solving unrelated coding problems, and if this is the case, then disabling it would cause collateral damage that would go undetected by an evaluation limited to McEval-Hard alone.
@@ -762,14 +763,14 @@ tell us. Table~\ref{tab:absolute_metrics} and Figure~\ref{fig:mceval_accuracy} s
 \hline
 \textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
 \hline
-Original/Instruct                & 31.89 & 0.5139 & 227 & 0    \\
-PL-Only                          & 31.72 & 0.5474 & 227 & 0    \\
-Leaked                           & 39.30 & 0.6253 & 227 & 0    \\
-Masked (Z=6, TH=0.266)           & 19.82 & 0.5656 & 227 & 1250 \\
-Masked (Z=7, TH=0.304)           & 32.25 & 0.5967 & 227 & 919  \\
-Masked (Z=8, TH=0.343)           & 32.25 & 0.5979 & 227 & 693  \\
-Masked (Z=9, TH=0.381)           & 33.13 & 0.6039 & 227 & 536  \\
-Masked (Z=10, TH=0.420)          & 34.63 & 0.6112 & 227 & 409  \\
+Original/Instruct                & 31.89\% & 0.5139 & 227 & 0    \\
+PL-Only                          & 31.72\% & 0.5474 & 227 & 0    \\
+Leaked                           & 39.30\% & 0.6253 & 227 & 0    \\
+Masked (Z=6, TH=0.266)           & 19.82\% & 0.5656 & 227 & 1250 \\
+Masked (Z=7, TH=0.304)           & 32.25\% & 0.5967 & 227 & 919  \\
+Masked (Z=8, TH=0.343)           & 32.25\% & 0.5979 & 227 & 693  \\
+Masked (Z=9, TH=0.381)           & 33.13\% & 0.6039 & 227 & 536  \\
+Masked (Z=10, TH=0.420)          & 34.63\% & 0.6112 & 227 & 409  \\
 \hline
 \end{tabular}%
 }
@@ -971,43 +972,116 @@ Neither strategy fully achieves the ideal described in Section~\ref{sec:memoriza
 memorization-specific and general-purpose neurons is the central challenge the intervention must navigate.
 
 \section{Robustness Evaluation}
-Figures~\ref{fig:robustness_mbpp} and~\ref{fig:robustness_humaneval} report accuracy on
-MBPP-Plus and HumanEval-Plus respectively, for the Original/Instruct model, the PL-Only
-baseline, the Leaked model, and the masked variants at Z-score thresholds from 6 to 10.
-These results are used to verify the core assumption of section~\ref{sec:robustness_neurons}:
-masking the identified McEval-Hard benchmark-specific neurons should not broadly degrade the model's general coding capabilities, as measured by performance on unrelated benchmarks.
+In Section~\ref{sec:robustness_design} we described the design of the cross-benchmark evaluation to test the robustness of the neuron masking intervention.
+There we made a core assumption: that the neurons identified as McEval-Hard-specific would not be encoding general Python coding competence that is also used to solve problems from unrelated benchmarks, and therefore masking them would not cause a significant drop in performance on those benchmarks.
+We also noted that the results would provide an empirical bound for choosing the Z-score threshold, by revealing where the intervention starts to cause collateral damage. 
+Tables~\ref{tab:humaneval_robustness} and~\ref{tab:mbpp_robustness}
+report the full accuracy and TSED results on HumanEval+ and MBPP+ respectively,
+with Figures~\ref{fig:robustness_humaneval} and~\ref{fig:robustness_mbpp} providing
+the visual comparison across thresholds.
+
+\begin{table}[h]
+\centering
+\caption{Accuracy and TSED on MBPP+ for baseline models and masked variants.}
+\label{tab:mbpp_robustness}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrr}
+\hline
+\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
+\hline
+Original/Instruct       & 53.33\% & 0.4299 & 378 & 0    \\
+PL-Only                 & 57.67\% & 0.4920 & 378 & 0    \\
+Leaked                  & 57.83\% & 0.4597 & 378 & 0    \\
+Masked (Z=6, TH=0.266)  & 56.30\% & 0.4759 & 378 & 1250 \\
+Masked (Z=7, TH=0.304)  & 55.82\% & 0.4690 & 378 & 919  \\
+Masked (Z=8, TH=0.343)  & 56.67\% & 0.4690 & 378 & 693  \\
+Masked (Z=9, TH=0.381)  & 56.35\% & 0.4639 & 378 & 536  \\
+Masked (Z=10, TH=0.420) & 56.72\% & 0.4652 & 378 & 409  \\
+\hline
+\end{tabular}%
+}
+\end{table}
+
+Starting with MBPP+, the results are very encouraging for the robustness of the intervention.
+We can see from the table that all three unmasked models perform differently from each other --- Original/Instruct at 53.33\%, PL-Only at 57.67\%, and
+Leaked at 57.83\% --- but what matters for the robustness test is how the masked variants
+perform compared to this range. 
+By looking at the table and the figure, we can see that all masked variants from Z=6 to Z=10 sit within the range 55.82\% and 56.72\%
+consistently within the PL-Only baseline and well above the Original/Instruct baseline.
+Curiously, this stability across thresholds is observed even at Z=6, where the intervention was too aggressive on McEval-Hard and caused a significant drop in performance.
+The TSED scores follow the same pattern, ranging between 0.4639 and
+0.4759 across masked variants, close to the baseline range. 
+This results strongly supports the core assumption behind the robustness evaluation and the masking intervention in general: the neurons identified as McEval-Hard-specific do not encode general coding competence that is also used to solve problems from MBPP+, and therefore masking them does not cause a significant drop in performance on this benchmark.
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=\linewidth]{img/accuracy_comparison_mbpp_plus.png}
-\caption{Accuracy on MBPP-Plus for the baseline models and masked variants across
+\caption{Accuracy on MBPP+ for the baseline models and masked variants across
 Z-score thresholds (Z=6--10). Performance remains stable across all thresholds,
 demonstrating that the masking intervention does not impair general coding capability on
 this benchmark.}
 \label{fig:robustness_mbpp}
 \end{figure}
-On MBPP-Plus (Figure~\ref{fig:robustness_mbpp}), all masked models achieve accuracy in the
-range 55.8\%--56.7\%, not degrading from the PL-Only and Leaked baselines (57.7\% and 57.8\%
-respectively). The flat performance across the entire range of Z-score thresholds tested confirms that the masking intervention does not
-break down the model's ability to solve problems from an entirely unrelated benchmark.
 
- 
+\begin{table}[h]
+\centering
+\caption{Accuracy and TSED on HumanEval+ for baseline models and masked variants.}
+\label{tab:humaneval_robustness}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrr}
+\hline
+\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
+\hline
+Original/Instruct       & 65.00\% & 0.5105 & 164 & 0    \\
+PL-Only                 & 65.37\% & 0.6102 & 164 & 0    \\
+Leaked                  & 64.63\% & 0.5683 & 164 & 0    \\
+Masked (Z=6, TH=0.266)  & 54.15\% & 0.5725 & 164 & 1250 \\
+Masked (Z=7, TH=0.304)  & 59.27\% & 0.5735 & 164 & 919  \\
+Masked (Z=8, TH=0.343)  & 60.24\% & 0.5685 & 164 & 693  \\
+Masked (Z=9, TH=0.381)  & 62.32\% & 0.5720 & 164 & 536  \\
+Masked (Z=10, TH=0.420) & 63.17\% & 0.5762 & 164 & 409  \\
+\hline
+\end{tabular}%
+}
+\end{table}
+
+HumanEval+ tells a slightly different story.
+This time the three unmasked models are more tightly clustered --- 65.00\%, 65.37\%, and 64.63\% --- 
+confirming, as expected, that McEval-Hard contamination does not affect performance on this unrelated benchmark.
+By looking at the table and the figure, we can see that the masked variants at Z$\geq$8 remain reasonably close to the range of the baselines, with accuracy of 60.24\% at Z=8, 62.32\% at Z=9, and 63.17\% at Z=10, and with a TSED scores stable around 0.57 throughout.
+This stability at higher thresholds supports the core assumption, again. 
+However, at Z=7 where 919 neurons are masked, the accuracy drops to 59.27\%, and at Z=6, where 1,250 neurons are masked, it falls even further to
+54.15\% --- a reduction of approximately 11 percentage points from the unmasked
+baselines. 
+Figure~\ref{fig:robustness_humaneval} makes the drop at Z=6 immediately visible, with a clear recovery trend from Z=7 to Z=10, where performance gets closer to the baselines as the intervention becomes more conservative.
+\par\vspace{1em}
+Unlike MBPP+, HumanEval+ is sensitive to the lower Z-score thresholds, meaning that at Z=6 and Z=7 some of the disabled neurons are indeed responsible for encoding general coding competence that is used to solve problems from HumanEval+, and therefore masking them does cause a significant drop in performance on this benchmark, indicating that the intervention is too aggressive.
+This result is consistent with the McEval-Hard results at Z=6 observed in section
+consistent with the over-ablation observed on McEval-Hard at Z=6 in section~\ref{sec:inference_pip_eval}: the same aggressive masking that dropped
+performances on the target benchmark also impairs a structurally similar Python
+benchmark. 
+Notably, the TSED scores on HumanEval+ remain flat across all masked
+variants (0.5685--0.5762), close to the Leaked model's 0.5683, indicating that the
+structural style of generated outputs is not affected.
+The only metric that drops is accuracy, suggesting that the neurons being disabled at lower thresholds contribute to correctness rather than code structure.
+
 \begin{figure}[h]
 \centering
 \includegraphics[width=\linewidth]{img/accuracy_comparison_humaneval_plus.png}
-\caption{Accuracy on HumanEval-Plus for the baseline models and masked variants across
+\caption{Accuracy on HumanEval+ for the baseline models and masked variants across
 Z-score thresholds (Z=6--10). A drop at Z=6 indicates collateral damage from aggressive
 masking; accuracy recovers monotonically as the threshold increases.}
 \label{fig:robustness_humaneval}
 \end{figure}
 
-\par{\vspace{1em}}
-On HumanEval-Plus (Figure~\ref{fig:robustness_humaneval}), the three unmasked models are
-close in terms of performance---Original/Instruct at 65.0\%, PL-Only at 65.4\%, and Leaked at
-64.6\%. Figure shows that the masked models at Z $\geq$ 8 achieve accuracy between 60.2\% and
-63.2\%, remaining close to the unmasked baselines and well above the Original/Instruct
-reference. This performances stability across Z-score thresholds from 8 to 10 indicates that the masking intervention does not broadly degrade the model's general coding ability on this benchmark.
-However, at the lowest threshold tested (Z=6), accuracy drops to 54.1\%, which is a significant reduction from the unmasked baselines. This suggests that at Z=6, the masking intervention is too aggressive and begins to capture neurons that are shared between McEval-Hard and HumanEval-Plus, leading to collateral damage in general coding capability. 
+
+
+
+
+
+
+
+
 
 \appendix %optional, use only if you have an appendix
 

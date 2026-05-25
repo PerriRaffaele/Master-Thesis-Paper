@@ -281,6 +281,7 @@ Cutoff date                & Early 2024					& Mid 2026 \\
 \end{table}
 
 \section{Evaluated Code Generation Benchmarks}
+\label{sec:benchmarks}
 The experimental pipeline requires two distinct types of benchmarks: one that serves as the
 contamination target, and others that act as independent probes for general coding capability.
 Each plays a different but complementary role in validating the approach.
@@ -313,7 +314,7 @@ regardless. Third, its manageable size (227 problems) makes it easier to include
 evaluate repeatedly across multiple experimental runs within a reasonable computational
 time.
  
-\paragraph{HumanEval-Plus and MBPP-Plus (robustness probes).}
+\paragraph{HumanEval+ and MBPP+ (robustness probes).}
 To verify that the unlearning intervention does not impair general coding capability,
 we use HumanEval+ and MBPP+ (\citet{liu2023codegeneratedchatgptreally}) as independent
 evaluation benchmarks. These are strengthened versions of HumanEval and MBPP respectively,
@@ -713,11 +714,25 @@ Once the set of purely memorized tasks is identified we:
 \end{itemize} 
 This analysis results are reported in the results section~\ref{sec:memorization_analysis_results}.
 
-\section{Robustness of Neuron Masking Intervention}
-\label{sec:robustness_neurons}
-A critical requirement of any unlearning intervention is that it does not broadly degrade the model's general coding capabilities beyond the intended unlearning scope. To verify this, we conduct a cross-benchmark robustness evaluation: the contaminated model, after having its McEval-Hard-specific neurons masked, is evaluated on two additional benchmarks — HumanEval-Plus and MBPP-Plus — which were not used during any stage of the detection or masking process.
-\par\vspace{1em}
-This cross-benchmark evaluation serves two purposes. First, it confirms that the masked neurons are indeed specific to McEval-Hard content and do not encode general Python coding competence required for unrelated problems. Second, it establishes a practical upper bound on how aggressively we can mask neurons (i.e., how low a Z-score threshold we can use) before the intervention begins to impair general model utility.
+\subsection{Robustness of Neuron Masking Intervention}
+The memorization analysis described in previous section, tells us whether the neuron masking intervention successfully suppresses the memorization of McEval-Hard problems, and whether it preserves the ability to solve non-memorized tasks.
+however, there is a complementary question that it cannot answer: does masking those neurons leave general coding ability intact? 
+A neuron flagged as benchmark-specific based on its activation pattern could also take part in solving unrelated coding problems, and if this is the case, then disabling it would cause collateral damage that would go undetected by an evaluation limited to McEval-Hard alone.
+ 
+To test this assumption, we evaluate the masked model on HumanEval+ and
+MBPP+ after the masking of the McEval-Hard-specific neurons. 
+These two benchmarks were introduced in section~\ref{sec:benchmarks} precisely for this purpose:
+they were not used either during neuron detection nor masking, so any change in performance on them can only be attributed
+to the masking itself. 
+If the masked neurons are truly McEval-Hard-specific only, performance on HumanEval+
+and MBPP+ should remain close to the unmasked baseline, or near it. If it drops significantly, then
+it means the disabled neurons were encoding general Python coding competence that the detection pipeline incorrectly attributed to benchmark memorization.
+ 
+This evaluation also provides a practical bound for choosing the Z-score threshold. 
+As the threshold is lowered more nerurons are masked, and at a certain point the intervention will become too aggressive, impairing general coding ability and causing a significant drop in performance.
+These results will exactly tell us where that boundary lies, giving a lower bound on the Z-score values to take into account when selecting the final model variant for the McEval-Hard evaluation.
+Together with the McEval-Hard results and the memorization analysis, this
+completes the evaluation of the masking intervention: does it suppress memorization correctly, does it preserve generalization on the target benchmark, and does it leave unrelated capabilities untouched?
 
 \chapter{Results}
 \section{Inference Pipeline Evaluation}

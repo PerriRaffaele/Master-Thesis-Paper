@@ -230,51 +230,58 @@ This chapter describes the end-to-end design of our approach for benchmarking un
 The choice of model is guided by two practical requirements: the model must be small enough
 to allow rapid iteration across multiple experimental conditions, and it must be representative
 of the class of code LLMs that are commonly deployed in practice. With these constraints in
-mind, all primary experiments are conducted using Qwen2.5-Coder-1.5B
+mind, all primary experiments are conducted using \textbf{Qwen2.5-Coder-1.5B}
 (\citet{hui2024qwen25codertechnicalreport}), a decoder-only transformer from Alibaba's
 Qwen2.5-Coder family that is pre-trained on 5.5 trillion tokens of code and natural language.
 We use two variants: the base model, which serves as the starting point for all fine-tuning
 pipelines, and Qwen2.5-Coder-1.5B-Instruct, the instruction-tuned counterpart, which
 is used as a reference for post-training weight transfer and as a clean evaluation baseline.
 The key architectural properties of both variants are reported in Table~\ref{tab:model_architecture}.
- 
-To assess the generality of the approach beyond a single model family, we additionally apply
-the pipeline to Qwen3.5-2B (\citet{qwen3.5}), a more recent model from Alibaba that
-introduces a hybrid architecture combining Gated Delta Networks with sparse
-Mixture-of-Experts, and extends context length to over 262,000 tokens natively. As with the
-Qwen2.5-Coder family, we use both the base variant for fine-tuning and the instruction-tuned
-variant as a reference. The architectural properties of Qwen3.5-2B are included alongside
-Qwen2.5-Coder-1.5B in Table~\ref{tab:model_architecture}.
+\par\vspace{1em}
+Running the full pipeline on a single model is not sufficient to establish the generality of the results. 
+To ensure that the results are not specific to a single model, we replicate the full pipeline on
+a second model: \textbf{Qwen3-1.7B} (\citet{yang2025qwen3technicalreport}), a dense decoder-only
+transformer from Alibaba's Qwen3 family released in May 2025. 
+Even though it has a slightly different architecture from Qwen2.5-Coder and was pre-trained on substantially more data (36 trillion tokens)
+its overall design is closely related, and it is a natural next step in the same model family, making it an ideal candidate for replication.
+As with the primary model, we run the complete pipeline: (1) fine-tuning, (2) contamination simulation, (3) neuron detection, (4) masking, (5) memorization analysis, and (6) cross-benchmark robustness evaluation, allowing a direct comparison of results across
+the two model generations.
+\par\vspace{1em} 
+As it is not sufficient to run the full pipeline on one model only to establish the generality of the results, we also probe whether the core assumption of neuron specificity holds
+for a model with a substantially different architecture. For this purpose we use
+\textbf{Qwen3.5-2B} (\citet{qwen3.5}), a recent model from Alibaba that introduces a hybrid
+architecture combining Gated Delta Networks with sparse Mixture-of-Experts, and extends
+context length to over 262,000 tokens natively. 
+Instead of running the full pipeline on this model, we only apply the neuron detection and masking steps of two benchmarks (HumanEval+ and MBPP+) to verify the cross-benchmark robustness of the identified neurons.
+The architectural properties of all three models are summarised in Table~\ref{tab:model_architecture}.
+
 \begin{table}[ht]
 \centering
-% \scalebox{0.80}{
-\begin{tabular}{lll}
+\hspace*{-1.2cm}
+\begin{tabular}{llll}
 \toprule
-\multirow{2}{13em}{\textbf{Property}} & \multirow{2}{13em}{\textbf{Qwen2.5-Coder-1.5B / 1.5B-Instruct}} & \multirow{2}{10em}{\textbf{Qwen3.5-2B / 2B-Instruct}} \\
-& & \\
+\textbf{Property} & \textbf{Qwen2.5-Coder-1.5B} & \textbf{Qwen3-1.7B} & \textbf{Qwen3.5-2B}\\
 \midrule
-\multirow{2}{13em}{Architecture} & \multirow{2}{10em}{Decoder-only Transformer} & \multirow{2}{11em}{Hybrid (Gated DeltaNet + Attention + MoE)} \\
-& & \\
-Total parameters          & 1.54B                            & 2B \\
-Non-embedding parameters  & 1.31B                            & --- \\
-Number of layers          & 28                               & 24 \\
-Hidden size               & 1,536                            & 2,048 \\
-Intermediate size (MLP)   & 8,960                            & 6,144 \\
-Attention heads (Query)   & 12                               & 8 \\
-\multirow{2}{10em}{Attention heads (KV)} & \multirow{2}{10em}{2 (Grouped Query Attention)} & \multirow{2}{10em}{2 (Grouped Query Attention)} \\
-& & \\
-Head size                 & 128                              & 256 \\
-Vocabulary size           & 151,646 tokens                   & 248,320 tokens \\
-Max context length        & 32,768 tokens                    & 262,144 tokens \\
-Positional encoding       & RoPE                             & RoPE \\
-Activation function       & SwiGLU                           & SwiGLU \\
-Normalization             & RMSNorm                          & RMSNorm \\
-Pre-training tokens       & 5.5 trillion                     & --- \\
-Precision (experiments)   & \texttt{bfloat16} / \texttt{float16} & \texttt{bfloat16} / \texttt{float16} \\
-Cutoff date                & Early 2024					& Mid 2026 \\
+\multirow{2}{13em}{Architecture} & \multirow{2}{10em}{Decoder-only Transformer} & \multirow{2}{6em}{Decoder-only Transformer} & \multirow{2}{11em}{Hybrid (Gated DeltaNet + Attention + MoE)} \\
+& & & \\
+Total parameters        & 1.54B                    & 1.7B                     & 2B \\
+Number of layers        & 28                       & 28                       & 24 \\
+Hidden size             & 1,536                    & 2,048                    & 2,048 \\
+Intermediate size (MLP) & 8,960                    & 8,960                    & 6,144 \\
+Attention heads (Query) & 12                       & 16                       & 8 \\
+\multirow{2}{10em}{Attention heads (KV)} & \multirow{2}{10em}{2 (Grouped Query Attention)} & \multirow{2}{8em}{8 (Grouped Query Attention)} & \multirow{2}{8em}{2 (Grouped Query Attention)} \\
+& & & \\
+Head size               & 128                      & 128                      & 256 \\
+Vocabulary size         & 151,646 tokens           & 151,936 tokens           & 248,320 tokens \\
+Max context length      & 32,768 tokens            & 32,768 tokens            & 262,144 tokens \\
+Positional encoding     & RoPE                     & RoPE                     & RoPE \\
+Activation function     & SwiGLU                   & SwiGLU                   & SwiGLU \\
+Normalization           & RMSNorm                  & RMSNorm + QK-Norm        & RMSNorm \\
+Pre-training tokens     & 5.5 trillion             & 36 trillion              & --- \\
+Precision (experiments) & \texttt{bfloat16}        & \texttt{bfloat16}        & \texttt{bfloat16} \\
+Training cutoff         & Early 2024               & Mid 2025               & Mid 2026 \\
 \bottomrule
 \end{tabular}
-% }
 \caption{Architectural properties of the models used in this work.
 \citep{hui2024qwen25codertechnicalreport, qwen3.5}}
 \label{tab:model_architecture}
@@ -1075,12 +1082,41 @@ masking; accuracy recovers monotonically as the threshold increases.}
 \end{figure}
 
 
+\chapter{Limitations}
+Every experimental study has some limitations that affect what can be claimed from its results.
+This chapter goes through those limitations, making them explicit and separating between those that come from the research questions themselves and those that are caused by pracctical aspects of the work.
 
+\section{Computational Resources}
+All the conducted experiments in this work were constrained by the computational resources available.
+For the entire work, a single NVIDIA Tesla V100S-PCIE GPU with 32\,GB of VRAM was used.
+Even if this is a powerful research-grade device, it imposed practical limits on the scale and speed of the experiments.
+The training of a single model variant for 10 epochs took approximately 36 hours, so any additional hyperparameter configuration or different model variant added significant time to the experimental cycle.
+Furthermore, the inference pipeline --- which involves 5 independent iterations per model variant, with each iteration running over 227 benchmark problems --- also took a significant amount of time, with each iteration taking roughly 40 minutes --- for a total of around 3.5 hours per full evaluation run across all benchmark problems.
+\par\vspace{1em}
+The memory constraint was also a key factor in the design of the experiments, as it limited the size of the models that could be fine-tuned and evaluated.
+At 32\,GB of VRAM, the largest model we could get to fine-tune comfortably is in the 1.5B/2B parameter range, which is why all three models used in the work fall within this range: Qwen2.5-Coder-1.5B (1.54B parameters), Qwen3-1.7B (1.7B parameters), and Qwen3.5-2B (2B parameters).
+Larger models, that might have shown different behaviors in terms of memorization and generalization, were not accessible within these constraints.
+\par\vspace{1em}
+Therefore, the results of this work are specific to small-scale code LLMs in the 1.5B--2B parameter range, leaving open the question of whether the findings would hold for larger models, which might have different internal dynamics and might be more or less prone to memorization and generalization in different ways.
 
+\section{Controlled Contamination vs.\ Real-World Leakage}
+Another limitation of this work is the gap between the controlled contamination scenario studied in the experiments and the more complex and diffuse nature of real-world benchmark leakage.
+The scenario of contamination studied in this work is intentionally designed to be controlled:
+\begin{enumerate}
+	\item[(1)] The benchmark is explicitly appended to the training corpus, ensuring that the model is exposed to it during training.
+	\item[(2)] The point of contamination is known and fixed, allowing for a clear before-and-after comparison of the model's performance and internal representations.
+	\item[(3)] The model checkpoint epoch is chosen after a fixed number of training epochs.
+\end{enumerate}
+Even if controlled, this setup is necessary to conduct a clean experiment, to isolate the effect of contamination from other variables, and to validate the neuron detection and masking approach in a setting where the contamination is known and can be directly linked to the observed performance changes.
+\par\vspace{1em}
+However, leakage in real-world scenarios is often much messier and less controlled than this.
+Benchmark problems may be included in training corpora without explicit labeling, may be paraphrased or reformatted, and may be introduced at various stages of a multi-phase training pipeline.
+It is unclear how well the neuron detection and masking approach would perform in such a scenario, where the contamination signal might be more diffuse.
+It is possible that real-world contaminated models distribute benchmark knowledge across a wider range of neurons, making it harder to identify and mask the specific neurons responsible for memorization without also affecting general coding competence.
+On the other hand, it is also possible that real-world contamination produces stronger memorization signals in certain neurons, making them easier to detect and mask effectively.
+The bridge between controlled contamination and real-world leakage is an important area for future research, as it would help to validate the practical applicability of the neuron masking approach and to refine it for use in more realistic scenarios.
 
-
-
-
+\section{McEval-Hard as the Only Contamination Target}
 
 
 \appendix %optional, use only if you have an appendix

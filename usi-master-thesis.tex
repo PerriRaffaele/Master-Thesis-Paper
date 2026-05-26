@@ -63,10 +63,51 @@ This is a very abstract abstract.
 \mainmatter
 
 \chapter{Introduction}
- 
+Large language models for code have become one of the most prominent categories of AI systems, with models achieving high results on code generation benchmarks.
+The evaluation of these models is essential: benchmark-based evaluation is the standard approach in the community to compare capabilities, track progress, and decide the model to be deployed in real-world applications.
+However, the validity of benchmark-based evaluation is threatened by data contamination: if a model has been trained on the benchmark problems or their solutions, its performance may reflect memorization rather than genuine generalization, leading to inflated scores that do not reflect true coding capability.
+If benchmark scores cannot be trusted, the entire evaluation process is compromised, and the community loses a critical tool for measuring progress and comparing models.
+\par\vspace{1em}
+Many evidences have shown that they cannot be trusted.
+Benchmarks such as HumanEval (\citet{DBLP:journals/corr/abs-2107-03374}) and MBPP (\citet{austin2021programsynthesislargelanguage}) are publicly available and have been widely distributed across repositories, making it more possible that they were included, in whole or in part, in the pretraining data of many models later evaluated on them.
+The main issue is if a model has seen the benchmark during training, the benchmark-based evaluation is no longer a valid measure of the model's coding capability, as it may be simply recalling memorized solutions rather than demonstrating true generalization to unseen problems.
+This phenomenon, also called data contamination (or data leakage), has been confirmed by several studies: \citet{riddell2024quantifyingcontaminationevaluatingcode} found out that the performance of a model on contaminated problems is significantly higher than on clean ones.
+\citet{matton2024leakagecodegenerationevaluation} found out that Humaneval problems are present at least 43 times in public GitHub repositories.
+\citet{zhou2025lessleakbenchinvestigationdataleakage} documented contamination across 83 software engineering benchmarks, with an average contamination ratio of 4.8\%, with even higher rates in widely used benchmarks.
+\par\vspace{1em}
+The commond strategies to address contamination are: filtering training data before training, or creating new benchmarks.
+However, these strategies are not sufficient: filtering is error-prone and incomplete and creating new benchmarks does not solve the problem as they will become contaminated as soon as they are released.
+What is needed is a way to remove contamination, focusing on post-hoc solutions that can be applied to existing models without the need for costly retraining or new benchmark creation: a technique that can erase benchmark-specific knowledge from a contaminated model, effectively restoring the validity of benchmark-based evaluation.
+\par\vspace{1em}
+An encouraging approach is machine unlearning, which refers to the specific removal of some training data or knowledge from a trained model, without retraining from scratch.
+Machine unlearning techniques have been developed to address various issues in LLMs, including data privacy, copyright removal, safety alignment, bias mitigation, and hallucination reduction (\citet{liu2024rethinkingmachineunlearninglarge}).
+A vast majority of these techniques are gradient-based and operate by modifying the model's parameters to maximize the loss on the data to be forgotten while minimizing the loss on the data to be retained.
+Another alternative approach is the neuron-based unlearning: first localize the neurons responsible for retaining target knowledge and then mask those neurons to suppress the retrieval of that knowledge.
+This approach has been shown to work effectively well on removing knowledge in multilingual models (\citet{kojima2024multilingualabilitydecoderbasedpretrained}) and sensitive content in code LLMs (\citet{pochinkov2024dissectinglanguagemodelsmachine}).
+These promising results suggest that neuron-based unlearning may be similarly effective for removing benchmark-specific knowledge from contaminated code LLMs.
+
+\section{Contributions}
+This work investigates the use of neuron-based machine unlearning technique to remove benchmark contamination from code LLMs, with the goal of restoring the validity of benchmark-based evaluation.
+The main contributions of this thesis are:
+\begin{itemize}
+	\item \textbf{A controlled contamination simulation.} We designed a controlled contamination scenario where a small code LLM (Qwen2.5-Coder-1.5B) is trained on a dataset that intentionally includes a target benchmark (McEval-Hard), allowing us to simulate a clean contamination scenario where the benchmark is explicitly included in training without any pretraining overlap. This provides a clear experimental target for validating the unlearning approach.
+	\item \textbf{A benchmark-specific neuron detection pipeline.} We developed a pipeline to identify the neurons most responsible for retaining benchmark-specific knowledge in the contaminated model. This pipeline: uses forward hooks to capture neuron activations patterns on both benchmark and control (non-benchmark) inputs, scores each neuron using Average Precision to quantify how well its activation distinguishes between benchmark and control inputs, and uses a Z-score-based thresholding method to disable the top neurons most associated with benchmark knowledge. A variant of this pipeline targets only the neurons responsible for a subset of tasks the model has demonstrably memorized.
+	\item \textbf{A weight masking intervention and evaluation methodology.} We implemented a weight masking intervention that sets the weights of the identified neurons to zero, effectively suppressing their contribution to the model's output. We then evaluated the impact of the intervention on the model's performance using two metrics: functional correctness (accuracy) and structural similarity to canonical solutions (TSED), that together distinguish between true unlearning of benchmark knowledge and over-masking of neurons that degrades general coding capability. We also conducted: a memorization analysis to track the forgetting of specific benchmark problems and the recovery of general coding capabilities, and a cross-benchmark robustness evaluation uing both HumanEval+ and MBPP+ to verify that the masking intervention does not impact too much the performance on other benchmarks.
+	\item \textbf{An evaluation across multiple models.} The full pipeline is evaluated on the Qwen2.5-Coder-1.5B, as the primary model, as well as on Qwen3-1.7B.
+\end{itemize}
+
+The results show that at Z-score threshold Z=8, the intervention achieves a significant reduction in benchmark performance reducing the model's accuracy on McEval-Hard from 39.3\% to 32.25\%.
+This reduction matches the performance of the clean baseline while the TSED score confirms that also the structural similarity to canonical solutions is reduced, indicating that the model is not just failing to retrieve memorized solutions but is effectively unlearning benchmark-specific knowledge.
+Cross-benchmark evaluation confirms that performance on HumanEval+ and MBPP+ is maintained at Z$\geq$8, validating the specificity of the identified neurons.
+\par\vspace{1em}
+However, a more detailed analysis reveals important limitations.
+The task-level memorization analysis shows that neither the subset-targeting nor the full-benchmark variant is able to forget the 19 problems that the model has memorized without causing collateral damage and recovering the tasks that the clean baseline was solving.
+These findings, considering that all the experiments were conducted on a relatively small model and in a controlled contamination scenario, mean that the current neuron-based unlearning approach is not yet sufficient to be claimed as a complete reliable solution to the problem of benchmark contamination and restoring the validity of benchmark-based evaluation in real-world settings.
+Instead, this work should be seen as a first investigation step into the potential of neuron-based unlearning, highlighting both its promise and its limitations.
+
 \chapter{Background and Related Work}
 This chapter establishes the theoretical and empirical foundations of the thesis. \\
-First, we introduce the core concepts underlying benchmark-based evaluation of code LLMs and machine unlearning, and then we survey the releant literature on code generation benchmarks, unlearning techniques, and data leakage in code LLMs.
+First, we introduce the core concepts underlying benchmark-based evaluation of code LLMs and machine unlearning, and then we survey the relevant literature on code generation benchmarks, unlearning techniques, and data leakage in code LLMs.
 
 \section{Code Generation Benchmarks}
 A benchmark is a standardized collection of tasks and evaluation criteria. It allows the research community to compare the capabilities of different models under controlled, reproducible conditions. In code generation, a benchmark generally consists of a prompt (a natural-language description or partial code stub), an expected output (a function or program), and one or more test cases acting as an oracle for functional correctness. The evaluation score is computed by running model-generated code against these test cases.\\
@@ -1124,6 +1165,38 @@ It is not clear how well these choices transfer to benchmarks with different pro
 From a benchmark to another, the nature of the problems, the structure of their solutions, the length, the difficulty, and the domain can vary significantly.
 These differences may change how strongly a model memorizes the benchmark and how intensely that memorization manifests in neuron activation patterns, which in turn may affect how well the neuron detection and masking approach can identify and suppress it without harming general coding competence.
 Therefore, since the pipeline was never tested on a second contamination target, it is not possible to tell how the approach would perform on a different benchmark.
+
+
+\chapter{Conclusions}
+This thesis aimed to investigate a specific question: can neuron-based unlearning techniques achieve to remove benchmark contamination in code LLMs, restoring the validity of the benchmark-based evaluation?
+The motivation for this question was clear: benchmark contamination is a growing challenge for the reliability of benchmark-based evaluation, while existing solutions either require access to training data that is rarely available for deployed models, or require the continuous creation of new benchmarks that will themselves become contaminated over time.
+A more appealing and sustainable solution would be to intervene directly on the contaminated model with a post-hoc technique directly targeting the neurons responsible for memorization.
+\par\vspace{1em}
+The approach proposed in this work is based on the idea that benchmark memorization may be localized in a specific subset of neurons that activate strongly when the model is exposed to benchmark problems rather than general coding problems --- even if structurally equivalent.
+By: extracting the activation patterns of the model layer using forward hooks, comparing the activation patterns on benchmark problems to those on general coding problems, and applying a Z-score thresholding mechanism to identify the neurons that are most specific to the benchmark, the pipeline identifies this subset of neurons without requiring access to the training data or to the training process.
+The masking intervention itself is simple and efficient: it disables the identified neurons during inference, in few seconds, requiring no data or training, and does not modify the rest of the model's parameters.
+\par\vspace{1em}
+The results of the experiments are partially positive.
+On the primary evaluation benchmark, McEval-Hard, the masking intervention at Z=8 shows a significant reduction in the model accuracy from 39.3\% to 32.25\% (matching the PL-Only baseline), with the TSED score confirming that the structural similarity to the canonical solutions reduced.
+Additionally, the cross-benchmark robustness evaluation on HumanEval+ and MBPP+ shows that the intervention does not cause a significant drop in performance on these unrelated benchmarks, supporting the core assumption that the identified neurons are specific to McEval-Hard and do not encode general coding competence used for general coding problems.
+These results suggest that the neuron masking approach can effectively suppress benchmark memorization while preserving general coding competence, at least in the controlled contamination scenario studied in this work.
+\par\vspace{1em}
+However, the task-level memorization analysis results reveal a more complex picture, exposing some of the limitations of the approach.
+Even when the masking intervention is focused on the subset of purely memorized tasks, neither the subset-targeted nor the full-benchmark masking variants are able to fully forget the memorized tasks without also losing some of the robust generalization and not recovering some capacity-starved tasks that contamination has affected.
+These results suggest that the neurons responsible for memorizing specific benchmark problems are also encoding general coding competence and make the model forgetting them without harming general coding ability a difficult challenge, even with a targeted approach.
+This limitation is the main obstacle to achieving a perfect unlearning of benchmark contamination, that future on benchmark unlearning will need to address.
+\par\vspace{1em}
+Furthermore, the scope of this work is also limited by some practical constraints under which the experiments were conducted, such as the computational resources available (a single NVIDIA Tesla V100S-PCIE GPU with 32\,GB of VRAM), the controlled contamination scenario, a small model size range (1.5B--2B parameters), and the single contamination target (McEval-Hard).
+The recalled results, in addtion to the constrains, mean that the findings of this work are specific to the studied scenario and may not generalize to larger models, different contamination scenarios, or different benchmarks, leaving open important questions for future works.
+What this work does provide, nonetheless, is: (1) a rigorous experimental validation of the neuron masking approach in a controlled contamination setting, (2) a reproducible pipeline for detecting and masking benchmark-specific neurons, (3) a detailed evaluation methodology not only measuring overall accuracy but also analyzing the structural similarity of generated solutions, and (4) a set of results that reveal both the potential and the limitations of neuron-based unlearning under this settings.
+\par\vspace{1em}
+In conclusion, this thesis contributes to understand that neuron-based unlearning techniques are a promising direction for addressing benchmark contamination in code LLMs.
+While the results are not perfect, they are promising enough to justify further researches to refine the approach, and the limitations are clear enough to guide next steps.
+Whether the approach can be improved to achieve a more complete unlearning of benchmark contamination without harming general coding competence still needs to be investigated, leaving an important open question.
+But now it is a better informed question, with a clearer understanding of the challenges and trade-offs involved, and with a validated experimental pipeline to test future improvements.
+
+
+
 
 
 \appendix %optional, use only if you have an appendix

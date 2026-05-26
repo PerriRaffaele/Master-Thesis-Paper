@@ -1117,6 +1117,13 @@ On the other hand, it is also possible that real-world contamination produces st
 The bridge between controlled contamination and real-world leakage is an important area for future research, as it would help to validate the practical applicability of the neuron masking approach and to refine it for use in more realistic scenarios.
 
 \section{McEval-Hard as the Only Contamination Target}
+The entire pipeline for detecting and unlearning contamination was designed, validated, and tuned on the single benchmark of McEval-Hard.
+The reason for this choice was motivated in section~\ref{sec:benchmarks}: McEval-Hard lets us simulate a clean contamination scenario where the benchmark is explicitly included in training without any pretraining overlap, providing a clear experimental target for validating the approach.
+\par\vspace{1em}
+It is not clear how well these choices transfer to benchmarks with different properties.
+From a benchmark to another, the nature of the problems, the structure of their solutions, the length, the difficulty, and the domain can vary significantly.
+These differences may change how strongly a model memorizes the benchmark and how intensely that memorization manifests in neuron activation patterns, which in turn may affect how well the neuron detection and masking approach can identify and suppress it without harming general coding competence.
+Therefore, since the pipeline was never tested on a second contamination target, it is not possible to tell how the approach would perform on a different benchmark.
 
 
 \appendix %optional, use only if you have an appendix

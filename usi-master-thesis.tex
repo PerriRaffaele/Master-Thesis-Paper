@@ -1291,42 +1291,34 @@ It could be due to the different architecture of Qwen3.5-2B, and a different dis
 of the weights across neurons, which may make it more sensitive to the intervention at low thresholds.
 A dedicated analysis of the weight distribution and the functional role of neurons in Qwen3.5-2B compared to Qwen2.5-Coder-1.5B would be needed to clarify this point, and is left as a direction for future works.
  
-% \paragraph{Cross-benchmark masking.}
-% The more revealing experiment is what happens when neurons detected for one benchmark
-% are ablated and the other benchmark is evaluated --- directly measuring cross-benchmark
-% neuron entanglement.
- 
-% When MBPP-Plus-specific neurons are ablated and HumanEval-Plus is evaluated
-% (Table~\ref{tab:qwen35_mbpp_on_humaneval}), accuracy drops to 39.63\%--43.78\%
-% across all thresholds tested (Z=4--7), compared to the baseline of 44.76\%. The drop
-% is modest but consistent, indicating that some neurons flagged as MBPP-Plus-specific
-% do encode knowledge relevant to HumanEval-Plus as well. At Z=7 (102 neurons),
-% accuracy nearly recovers to 43.78\%, suggesting the most conservative threshold
-% minimises this cross-benchmark interference.
- 
-% The reverse direction --- HumanEval-Plus-specific neurons ablated, MBPP-Plus evaluated
-% (Table~\ref{tab:qwen35_humaneval_on_mbpp}) --- tells a dramatically different story.
-% At Z=1--3, MBPP-Plus accuracy collapses almost entirely: 3.92\%, 0.95\%, and 1.48\%.
-% This is one of the most striking results in the entire set of experiments. It reveals that
-% at low Z-score thresholds, the neurons identified as HumanEval-Plus-specific are not
-% specific at all --- they encode a large portion of the general Python coding competence
-% required by MBPP-Plus as well. From Z=4 onward the situation normalises: accuracy
-% recovers to 42.49\%--46.30\%, broadly in line with the MBPP-Plus baseline. The TSED
-% scores follow the same pattern, collapsing at low thresholds and recovering from Z=4.
- 
-% This cross-benchmark entanglement in Qwen3.5-2B is substantially more severe than
-% what was observed with Qwen2.5-Coder-1.5B, where cross-benchmark effects were
-% mild even at aggressive thresholds. Two factors likely contribute to this difference.
-% First, the hybrid architecture of Qwen3.5-2B --- combining Gated Delta Networks with
-% sparse MoE layers --- concentrates computation differently from a standard
-% decoder-only transformer, potentially resulting in fewer neurons that carry more
-% functional responsibility. Second, the lower absolute accuracy of Qwen3.5-2B on
-% both benchmarks suggests it may be operating closer to its capability limits, making
-% it more sensitive to any intervention. These results reinforce the broader finding that
-% the Z-score threshold is the critical hyperparameter: across both architectures, the
-% intervention behaves safely at conservative thresholds and causes disproportionate
-% damage when set too aggressively. The full cross-benchmark results for Qwen3.5-2B
-% will be completed and incorporated once the remaining experimental runs are available.
+\paragraph{Cross-benchmark masking.}
+The second question is how the intervention behaves when one benchmark is evaluated after masking neurons specific to the other.
+\par\vspace{1em}
+When masking MBPP+ specific neurons and evaluating HumanEval+ (Table~\ref{tab:qwen35_mbpp_on_humaneval}), 
+the accuracy drops to a range of 39.63\%--43.78\% across all thresholds tested (Z=4--7), compared to the baseline of 44.76\%.
+The drop is proportional as the Z-score threshold decreases, with the most aggressive threshold (Z=4) causing a drop of approximately 5 percentage points, and the most conservative threshold (Z=7) causing a drop of just under 1 percentage point.
+This pattern suggests that as more neurons are masked, some of them are indeed encoding general coding competence that is used to solve problems from HumanEval+, and therefore masking them does cause a significant drop in performance on this benchmark.
+At Z=7 where 102 neurons are masked, the drop is less significant, with accuracy of 43.78\%, 
+indicating that the most conservative threshold minimises collateral damage.
+\par\vspace{1em}
+The other direction, when masking HumanEval+ specific neurons and evaluating MBPP+ (Table~\ref{tab:qwen35_humaneval_on_mbpp}), 
+the accuracy drops much more dramatically at low thresholds, with 3.92\% at Z=1, 0.95\% at Z=2, and 1.48\% at Z=3, compared to the baseline of 48.52\%.
+These results confirms again that at low thresholds the intervention is too aggressive, causing a significant collateral damage so significant
+that the model can barely solve any problem from MBPP+, reducing almost to zero the coding competence on this benchmark.
+However, from Z=4--7, the accuracy recovers to a range of 42.49\%--46.30\%, almost in line
+with the baseline.
+The TSED scores follow the same pattern, dropping to near zero at low thresholds and recovering to close to the baseline range from Z=4 onward.
+\par\vspace{1em}
+From these results, we can affirm that for this model, the cross-benchmark robustness of the intervention is more sensitive
+to the Z-score threshold than what was observed with Qwen2.5-Coder-1.5B, with significant drops in performance on the unrelated benchmark at low thresholds, and a recovery to near-baseline performance at higher thresholds.
+The factor comntributing to this difference are not fully clear, but there are some hypotheses that can be made based on the available results and the known differences between the two models.
+\begin{enumerate}
+	\item[(1)] As mentioned at the beginning of this section, we are not aware of any leakage of the HumanEval+ and MBPP+ benchmarks into the training data of Qwen3.5-2B. It is possible that the model has seen the whole or part of the benchmarks during training, or that has been exposed to previous versions as Humaneval and MBPP.
+	However, it is also possible that the model has not been exposed to the benchmarks.
+	\item[(2)] The architecture of Qwen3.5-2B is different from that of Qwen2.5-Coder-1.5B. This architectural difference may lead to a different distribution of the weights across neurons, and to a different functional role of neurons, which may make Qwen3.5-2B more sensitive to the intervention at low thresholds. 
+\end{enumerate}
+What we can say with confidence is that, for Qwen3.5-2B, the Z-score threshold is an important hyperparameter for the robustness of the intervention, with low thresholds causing significant drops in performance on unrelated benchmarks.
+
 
 \chapter{Limitations}
 Every experimental study has some limitations that affect what can be claimed from its results.

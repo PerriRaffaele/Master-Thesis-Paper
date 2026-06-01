@@ -312,8 +312,21 @@ Turning to unlearning applied specifically to code language models, \citet{chu20
 \par\vspace{1em}
 \citet{jiang2025largelanguagemodelunlearning} focus on unlearning copyrighted code and highlight the tension between removing memorized content and preserving coding ability. This work underscores that, in the code domain, the granularity and precision of the unlearning target are especially important: overly broad unlearning degrades general-purpose coding capabilities, while overly narrow unlearning may not fully suppress memorized knowledge — a challenge that neuron-level targeting is well-positioned to address.
 
+\begin{figure}
+	\centering
+	\includegraphics[angle=-90, width=0.78\textwidth]{img/study_design_p1.png}
+	\caption{Overview of the study design pipeline.}
+	\label{fig:study_design_p1}
+\end{figure}
+\begin{figure}
+	\centering
+	\includegraphics[angle=-90, width=0.77\textwidth]{img/study_design_p2.png}
+	\caption{Overview of the study design pipeline.}
+	\label{fig:study_design_p2}
+\end{figure}
+
 \chapter{Study Design}
-This chapter describes the end-to-end design of our approach for benchmarking unlearning in the evaluation of code LLMs. The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to disable them — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
+This chapter describes the end-to-end design of our approach for benchmarking unlearning in the evaluation of code LLMs (Figures~\ref{fig:study_design_p1} and ~\ref{fig:study_design_p2}). The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to disable them — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
 
 \section{Selected LLMs}
 \label{sec:selected_llms}

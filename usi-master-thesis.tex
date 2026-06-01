@@ -1228,6 +1228,13 @@ def string_transformation(A, B, rules):
 \end{figure}
 
 \paragraph{Summary.}
+These examples show what the metrics already suggested, in practice.
+On tasks with multiple possible solution strategies, the leaked model is recalling the
+specific solution it saw during training, while the masked model is generating a different, but correct, 
+solution by generalization.
+All the examples at different level of difference in TSED scores show the divergence between the two models, 
+showing that masking the intervention can lead to a significant change in the structure of
+the generated code, even when algorithmically equivalent solutions.
 
 
 \section{Memorization Analysis}

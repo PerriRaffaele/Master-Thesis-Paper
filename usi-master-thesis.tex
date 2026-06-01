@@ -26,6 +26,20 @@
     belowskip=2pt
 }
 
+\definecolor{darkgreen}{rgb}{0,0.6,0}
+\lstdefinestyle{pythonstyle2}{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,  
+    keywordstyle=\color{blue}\bfseries,
+    stringstyle=\color{orange},
+    commentstyle=\color{darkgreen}\itshape,
+    showstringspaces=false,
+    breaklines=true,
+    frame=none,
+    aboveskip=2pt,
+    belowskip=2pt
+}
+
 
 \setlength{\parindent}{0pt}
 
@@ -908,6 +922,313 @@ The increase drift in both metrics suggests that the intervention is disabling m
 Taken together across all thresholds, the results show that the Z-score threshold behaves exactly as described in Section~\ref{sec:thresholding}: it
 provides a spectrum of interventions ranging from aggressive (Z=6) to conservative (Z=10), with the ideal balance between suppressing memorization and preserving general coding ability appearing
 at Z=8 where the contamination is corrected and general capability is preserved.
+
+\subsection{Qualitative Analysis}
+Both the accuracy and TSED metrics tell us that the masking intervention is successful
+at reducing the contaminated model's performance on McEval-Hard, but they do not give us
+any insight into the specific tasks that are affected by the intervention.
+To get a better understanding of the effects of the intervention, we select few representative
+tasks, one per Z-score threshold, and more specifically the tasks that exhibit the most significant
+difference between the Leaked model and the masked model TSED scores --- among all tasks solved by both models.
+These are the tasks where the masking intervention has the most visible effect on the structure of the generated code.
+The leaked model is closely reproducing the canonical solution, while the masked model is
+generating a different solution that significantly diverges from the canonical one.
+By analyzing these results, we can notice how the model generation changes when the specific neurons
+are masked.
+
+\paragraph{Z=6 --- Task: Erlang/20.}
+\begin{figure}[h]
+\begin{lstlisting}[style=pythonstyle2]
+# Canonical
+def get_prime(n):
+    if n <= 2: return 0
+    sieve = [True] * n
+    sieve[0] = sieve[1] = False
+    for i in range(2, int(n**0.5) + 1):
+        if sieve[i]:
+            for j in range(i*i, n, i): sieve[j] = False
+    return sum(sieve)
+ 
+# Leaked baseline (structurally identical to canonical)
+def get_prime(n):
+    if n <= 2: return 0
+    sieve = [True] * n
+    sieve[0] = sieve[1] = False
+    for i in range(2, int(n**0.5) + 1):
+        if sieve[i]:
+            for j in range(i*i, n, i): sieve[j] = False
+    return sum(sieve)
+ 
+# Masked at Z=6 (different algorithm: helper + trial division)
+def get_prime(n):
+    if n <= 1: return 0
+    return sum(1 for num in range(2, n) if is_prime(num))
+ 
+def is_prime(num):
+    if num <= 1: return False
+    if num <= 3: return True
+    if num % 2 == 0 or num % 3 == 0: return False
+    i = 5
+    while i * i <= num:
+        if num % i == 0 or num % (i+2) == 0: return False
+        i += 6
+    return True
+\end{lstlisting}
+\caption{Erlang/20: canonical (top), leaked baseline (middle), masked at Z=6 (bottom).}
+\label{fig:erlang20}
+\end{figure}
+
+Figure~\ref{fig:erlang20} shows that the leaked model's output is structuraly identical to the canonical solution (TSED score of 0.9235), to the point that
+even variable names and loop bounds are the same. 
+The masked model, instead, produces a completely different solution (TSED score of 0.3596) that uses a helper function
+\texttt{is\_prime} with a trial division algorithm.
+Both solutions are correct and pass the tests, but they show two different strategies:
+(1) the leaked model is recalling the solution it saw during training, while (2) the masked
+model is generating a solution by generalization.
+This is exactly the ideal outcome described in Section~\ref{sec:masking} where the model has been forced to generalize
+rather than recall.
+
+\paragraph{Z=7 --- Task: Pascal/31.}
+\begin{figure}[h]
+\begin{lstlisting}[style=pythonstyle2]
+# Canonical
+def min_rounds_to_same_char(s):
+    from collections import Counter
+    if not s: return 0
+    return len(s) - max(Counter(s).values())
+ 
+# Leaked baseline (mirrors canonical strategy)
+def min_rounds_to_same_char(s):
+    if not s: return 0
+    from collections import Counter
+    char_counts = Counter(s)
+    return len(s) - s.count(char_counts.most_common(1)[0][0])
+ 
+# Masked at Z=7 (different strategy: count character transitions)
+def min_rounds_to_same_char(s):
+    if not s: return 0
+    target_char, rounds = s[0], 0
+    for char in s:
+        if char != target_char:
+            rounds += 1
+            target_char = char
+    return rounds
+\end{lstlisting}
+\caption{Pascal/31: canonical (top), leaked baseline (middle), masked at Z=7 (bottom).}
+\label{fig:pascal31}
+\end{figure}
+Figure~\ref{fig:pascal31} shows a similar pattern. 
+The leaked model's output is again structurally very similar to the canonical solution (TSED score of 0.6329),
+using the same strategy with the \texttt{Counter} class to count the most frequent character
+and returning the difference between the string length and that count.
+The masked model, instead, produces a different solution (TSED score of 0.4565), by using a different
+approach that counts character transitions instead of frequencies.
+Both solutions are correct and pass the tests, but again they show two different strategies.
+The fact that the masked model is solving the problem with a different strategy doesn't mean
+it is more or less correct, it is only using a different approach and the tests are not designed
+to distinguish between different strategies as long as the output is correct.
+
+\paragraph{Z=8 --- Task: Fortran/32.}
+Figure~\ref{fig:fortran32} shows a clear memorization signature in the leaked model's output.
+The leaked model produces a solution that is structurally identical to the canonical one (TSED score of 0.8919), 
+with only variable names changed.
+The masked model, instead, produces a different solution (TSED score of 0.4596) that switches to an approach
+with an explicit loop and an \texttt{isalpha} check. An heavier implementation that adds an extra
+conditional check not present in the canonical solution.
+Both solutions pass the tests, but the difference this time is significant: going from a
+one line code in the canonical solution to a loop with a conditional check is a clear divergence in the structure.
+Another insight from this example is that the canonical and leaked solution is not just different, but
+due to its compactness is the most elegant one, while the masked model's solution is more
+verbose and less elegant.
+\begin{figure}[h]
+\begin{lstlisting}[style=pythonstyle2]
+# Canonical (compact generator expression)
+def word_score(word):
+    return sum((ord(c.lower()) - ord('a') + 1) for c in word)
+ 
+# Leaked baseline (structurally identical to canonical)
+def word_score(word):
+    return sum((ord(char.lower()) - ord('a') + 1) for char in word)
+ 
+# Masked at Z=8 (different structure: explicit loop with isalpha check)
+def word_score(word):
+    total_score = 0
+    for char in word:
+        if char.isalpha():
+            total_score += (ord(char.lower()) - ord('a') + 1)
+    return total_score
+\end{lstlisting}
+\caption{Fortran/32: canonical and contaminated baseline are identical one-liners (top); masked at Z=8 uses an explicit loop (bottom).}
+\label{fig:fortran32}
+\end{figure}
+
+\paragraph{Z=9 --- Task: Haskell/3.}
+Figure~\ref{fig:haskell3} shows a similar pattern to the previous examples, but with a smaller gap in TSED scores between the leaked and masked models (1.000 vs 0.8140).
+The leaked model produces a solution that is structurally identical to the canonical one, with the only difference
+being the variable name \texttt{total} instead of \texttt{total\_sum}, that does not change the structure of the code at all.
+The masked model, instead, produces a different solution dropping in TSED score and reflecting a structural change.
+The masked model's solution, instead of using a single accumulator variable to sum both diagonals, it uses two separate accumulators,
+one per diagonal.
+The interesting part is that the masked model's solution algorithm is the same but what changes is the structure of the code.
+What is important also to notice is that the masked TSED score is still relatively high, 
+indicating that the masked model is still producing a solution that is structurally similar to the canonical one.
+This is understandable given that we are analyzing higher Z-score thresholds where fewer neurons are masked.
+\begin{figure}[h]
+\begin{lstlisting}[style=pythonstyle2]
+# Canonical
+def diagonal_sum(matrix):
+    n = len(matrix)
+    total = 0
+    for i in range(n):
+        total += matrix[i][i]
+        total += matrix[i][n - 1 - i]
+    if n % 2 == 1:
+        total -= matrix[n // 2][n // 2]
+    return total
+ 
+# Leaked baseline (TSED = 1.0 -- structurally identical to canonical)
+def diagonal_sum(matrix):
+    n = len(matrix)
+    total_sum = 0
+    for i in range(n):
+        total_sum += matrix[i][i]
+        total_sum += matrix[i][n - 1 - i]
+    if n % 2 == 1:
+        total_sum -= matrix[n // 2][n // 2]
+    return total_sum
+ 
+# Masked at Z=9 (TSED = 0.814 -- split accumulators, ternary correction)
+def diagonal_sum(matrix):
+    n = len(matrix)
+    main_diag_sum = 0
+    secondary_diag_sum = 0
+    for i in range(n):
+        main_diag_sum += matrix[i][i]
+        secondary_diag_sum += matrix[i][n - 1 - i]
+    return (main_diag_sum + secondary_diag_sum - matrix[n // 2][n // 2]
+            if n % 2 else main_diag_sum + secondary_diag_sum)
+\end{lstlisting}
+\caption{Haskell/3: canonical (top), contaminated baseline (middle), masked at Z=9 (bottom).}
+\label{fig:haskell3}
+\end{figure}
+
+\paragraph{Z=10 --- Task: Haskell/37.}
+Figure~\ref{fig:haskell37} shows another case, as the before one, where the leaked model's output is structurally identical to the canonical solution (TSED score of 0.9914),
+with only variable names changed, while the masked model produces a similar solution too but with some different structural choices (TSED score of 0.7794).
+However, except for the different variable names, and the masked conditional structure choice (not inlined) the two solutions are structurally very similar but with some little differences.
+Again, this is understandable given that we are analyzing higher Z-score thresholds where fewer neurons are masked, so the masked model is still able to produce a solution that is structurally similar to the canonical one.
+\begin{figure}[h]
+\begin{lstlisting}[style=pythonstyle2]
+# Canonical
+def average_of_divisible_and_non_divisible(n, k):
+    sum_div, count_div, sum_non, count_non = 0, 0, 0, 0
+    for i in range(1, n + 1):
+        if i % k == 0:
+            sum_div += i
+            count_div += 1
+        else:
+            sum_non += i
+            count_non += 1
+    avg_div = sum_div / count_div if count_div else 0.0
+    avg_non = sum_non / count_non if count_non else 0.0
+    return avg_div, avg_non
+ 
+# Leaked baseline (longer variable names, same structure)
+def average_of_divisible_and_non_divisible(n,k):
+    sum_divisible, count_divisible, sum_non_divisible, count_non_divisible = 0, 0, 0, 0
+    # same loop structure and logic as canonical, only variable names are different
+	...
+    avg_divisible = sum_divisible / count_divisible if count_divisible else 0.0
+    avg_non_divisible = sum_non_divisible / count_non_divisible if count_non_divisible else 0.0
+    return avg_divisible, avg_non_divisible
+ 
+# Masked at Z=10 (reordered names, same structure)
+def average_of_divisible_and_non_divisible(n,k):
+    divisible_sum, non_divisible_sum, divisible_count, non_divisible_count = 0
+    # same loop structure and logic as canonical, only variable names are different
+	...
+    if divisible_count == 0:
+        average_a = 0.0
+    else:
+        average_a = divisible_sum / divisible_count
+    if non_divisible_count == 0:
+        average_b = 0.0
+    else:
+        average_b = non_divisible_sum / non_divisible_count
+    return average_a, average_b
+\end{lstlisting}
+\caption{Haskell/37: all three variants implement the same imperative loop, differing only in variable names.}
+\label{fig:haskell37}
+\end{figure}
+
+\paragraph{Z=11 --- Task: Python/28.}
+Figure~\ref{fig:python28} shows a very rich example.
+All the solutions apply BFS to explore the search space of possible string transformations, but with importand differences.
+The canonical solution, for every occurrence of each rule, manually advances a start index, making it a more accurate implementation.
+The leaked model (TSED score of 0.7654), instead, uses the \texttt{replace} method to apply the rule globally, rather than iterating through all occurrences.
+The masked model (TSED score of 0.6249), uses the same \texttt{replace} method but with a difference: it uses a set of \texttt{visited} strings instead of a dictionary, and it also changes the termination condition of the BFS loop.
+However, the leaked model still shares the canonical solution's structure, while the masked model is structurally different
+\begin{figure}[H]
+\begin{lstlisting}[style=pythonstyle2]
+# Canonical (BFS, iterates all occurrences of src via manual find loop)
+def string_transformation(A, B, rules):
+    queue, visited = deque([(A, 0)]), {A: 0}
+    MAX_STEPS = 10
+    while queue:
+        current, steps = queue.popleft()
+        if current == B: return steps
+        if steps >= MAX_STEPS: continue
+        for src, dst in rules:
+            start = 0
+            while True:
+                idx = current.find(src, start)
+                if idx == -1: break
+                new_str = current[:idx] + dst + current[idx+len(src):]
+                if new_str not in visited or visited[new_str] > steps+1:
+                    visited[new_str] = steps+1
+                    queue.append((new_str, steps+1))
+                start = idx + 1
+    return "NO ANSWER!"
+ 
+# Leaked baseline (BFS, uses replace, applies rule globally)
+def string_transformation(A, B, rules):
+    if A == B: return 0
+    queue, visited = deque([(A, 0)]), {A: 0}
+    max_steps = 10
+    while queue:
+        current, steps = queue.popleft()
+        if steps >= max_steps: continue
+        if current == B: return steps
+        for src, dst in rules:
+            if current.find(src) != -1:
+                new_str = current.replace(src, dst)
+                if new_str not in visited or visited[new_str] > steps+1:
+                    visited[new_str] = steps+1
+                    queue.append((new_str, steps+1))
+    return "NO ANSWER!"
+ 
+# Masked at Z=11 (BFS, set-based visited, different termination)
+def string_transformation(A, B, rules):
+    if A == B: return 0
+    queue, visited = deque([(A, 0)]), {A}
+    max_steps = 10
+    while queue and len(visited) < max_steps:
+        current, steps = queue.popleft()
+        for src, dst in rules:
+            if current.find(src) != -1:
+                new_str = current.replace(src, dst)
+                if new_str == B: return steps+1
+                if new_str not in visited:
+                    visited.add(new_str)
+                    queue.append((new_str, steps+1))
+    return "NO ANSWER!"
+\end{lstlisting}
+\caption{Python/28: canonical BFS with all occurrences (top), leaked baseline with \texttt{replace} (middle), masked with set-based visited (bottom).}
+\label{fig:python28}
+\end{figure}
+
+\paragraph{Summary.}
+
 
 \section{Memorization Analysis}
 \label{sec:memorization_analysis_results}

@@ -1248,7 +1248,39 @@ solution by generalization.
 All the examples at different level of difference in TSED scores show the divergence between the two models, 
 showing that masking the intervention can lead to a significant change in the structure of
 the generated code, even when algorithmically equivalent solutions.
+\par\vspace{1em}
+An additional check we made connects these examples to the memorization analysis described in next section~\ref{sec:memorization_analysis_results}.
+For each Z-score threshold, we verified if any of the selected task belongs to the 19 purely memorized tasks identified in Table~\ref{tab:memorization_categories}.
+The results of this check are reported in Table~\ref{tab:qualitative_memorized_check}.
+\begin{table}[h]
+\centering
+\caption{Whether the selected qualitative example for each Z-score belongs to the
+pure memorization set identified in Section~\ref{sec:memorization_analysis_results}.}
+\label{tab:qualitative_memorized_check}
+\begin{tabular}{llcccc}
+\hline
+\textbf{Z-Score} & \textbf{Task} & \textbf{Baseline TSED} & \textbf{Masked TSED} & \textbf{Delta} & \textbf{In memorized set?} \\
+\hline
+6  & Erlang/20   & 0.9235 & 0.3596 & +0.5639 & No  \\
+7  & Pascal/31   & 0.6329 & 0.4565 & +0.1764 & No  \\
+8  & Fortran/32  & 0.8919 & 0.4596 & +0.4323 & Yes \\
+9  & Haskell/3   & 1.0000 & 0.8140 & +0.1860 & Yes \\
+10 & Haskell/37  & 0.9914 & 0.7794 & +0.2120 & No  \\
+11 & Python/28   & 0.7654 & 0.6249 & +0.1405 & Yes \\
+\hline
+\end{tabular}
+\end{table}
 
+Three of the six selected examples (Fortran/32, Haskell/3, Python/28) belong to the purely memorized set.
+This means that these tasks are solved by the leaked model exclusively because it saw them during the training, and the TSED score
+confirms that, when the specific neurons are masked, the model is no longer able to recall the memorized solution and it has to
+generate a different solution by generalization, leading to a significant drop in TSED score.
+The other three examples (Erlang/20, Pascal/31, Haskell/37) do not belong to the purely memorized set, yet they still show a drop in TSED score.
+This is an interesting result, as it suggests that even for tasks that are not purely memorized, the masking intervention can still 
+lead to a significant change in the structure of the generated code, indicating that some of the masked neurons may be involved in 
+encoding general coding competence that is shared across multiple tasks, including the ones in the memorized set and the ones outside of it.
+These two findings together confirm the conclusion that the TSED drop observed in the masked models, shows a change in how the model 
+is generating code, instead of just a drop in performance due to collateral damage from the masking.
 
 \section{Memorization Analysis}
 \label{sec:memorization_analysis_results}
@@ -1548,6 +1580,7 @@ Masked (Z=9, TH=0.712)    & 44.51\% & 0.5553 & 164 & 334  \\
 \hline
 Instruct (MBPP+) & 48.52\% & 0.4222 & 378 & 0    \\
 Masked (Z=1, TH=0.224) &  7.94\% & 0.1572 & 378 & 14719 \\
+Masked (Z=2, TH=0.344) &  20.85\% & 0.2946 & 378 & 7233 \\
 Masked (Z=3, TH=0.464) &  7.88\% & 0.1591 & 378 & 3911  \\
 Masked (Z=4, TH=0.584) & 42.22\% & 0.4655 & 378 & 2157  \\
 Masked (Z=5, TH=0.704) & 43.76\% & 0.4824 & 378 & 1114  \\
@@ -1623,7 +1656,7 @@ Z-score thresholds (Z=1--9).}
 \end{figure}
   
 For MBPP-Plus (Table~\ref{tab:qwen35_mbpp_on_mbpp}), the pattern is similar but more extreme.
-At lower thresholds (Z=1--3), the drop is much more severe than on HumanEval+, with
+At lower thresholds (Z=1 and Z=3), the drop is much more severe than on HumanEval+, with
 accuracy falling to 7.94\% at Z=1 and 7.88\% at Z=3, and TSED dropping to near zero.
 From Z=4--7, however, accuracy recovers to between 42.22\% and 46.14\%, with TSED scores recovering as well.\\
 This more severe drop respect to the Qwen2.5-Coder-1.5B results is not fully clear from

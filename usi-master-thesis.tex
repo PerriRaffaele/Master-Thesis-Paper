@@ -86,7 +86,7 @@ using a Z-score-based thresholding procedure.
 The selected neurons are then disabled by zeroing the corresponding columns of the MLP down-projection weight matrix,
 effectively suppressing their contribution to the model's output --- without requiring any gradient updates, additional data, or retraining.
 \par\vspace{1em}
-We evaluate the impact of this intervention on both Qwen2.5-Coder-1.5B and Qwen3-1.7B, using McEval-Hard
+We evaluate the impact of this intervention on the Qwen2.5-Coder-1.5B, using McEval-Hard
 as the contamination target within a controlled experimental scenario.
 At a threshold of Z=8, the intervention achieves a significant reduction in benchmark performance,
 reducing the model's accuracy from 39.3\% to 32.25\%, matching the performance of a clean baseline that was never exposed to the benchmark,
@@ -123,7 +123,7 @@ This phenomenon, also called data contamination (or data leakage), has been conf
 \citet{matton2024leakagecodegenerationevaluation} found out that Humaneval problems are present at least 43 times in public GitHub repositories.
 \citet{zhou2025lessleakbenchinvestigationdataleakage} documented contamination across 83 software engineering benchmarks, with an average contamination ratio of 4.8\%, with even higher rates in widely used benchmarks.
 \par\vspace{1em}
-The commond strategies to address contamination are: filtering training data before training, or creating new benchmarks.
+The common strategies to address contamination are: filtering training data before training, or creating new benchmarks.
 However, these strategies are not sufficient: filtering is error-prone and incomplete and creating new benchmarks does not solve the problem as they will become contaminated as soon as they are released.
 What is needed is a way to remove contamination, focusing on post-hoc solutions that can be applied to existing models without the need for costly retraining or new benchmark creation: a technique that can erase benchmark-specific knowledge from a contaminated model, effectively restoring the validity of benchmark-based evaluation.
 \par\vspace{1em}
@@ -141,7 +141,6 @@ The main contributions of this thesis are:
 	\item \textbf{A controlled contamination simulation.} We designed a controlled contamination scenario where a small code LLM (Qwen2.5-Coder-1.5B) is trained on a dataset that intentionally includes a target benchmark (McEval-Hard), allowing us to simulate a clean contamination scenario where the benchmark is explicitly included in training without any pretraining overlap. This provides a clear experimental target for validating the unlearning approach.
 	\item \textbf{A benchmark-specific neuron detection pipeline.} We developed a pipeline to identify the neurons most responsible for retaining benchmark-specific knowledge in the contaminated model. This pipeline: uses forward hooks to capture neuron activations patterns on both benchmark and control (non-benchmark) inputs, scores each neuron using Average Precision to quantify how well its activation distinguishes between benchmark and control inputs, and uses a Z-score-based thresholding method to disable the top neurons most associated with benchmark knowledge. A variant of this pipeline targets only the neurons responsible for a subset of tasks the model has demonstrably memorized.
 	\item \textbf{A weight masking intervention and evaluation methodology.} We implemented a weight masking intervention that sets the weights of the identified neurons to zero, effectively suppressing their contribution to the model's output. We then evaluated the impact of the intervention on the model's performance using two metrics: functional correctness (accuracy) and structural similarity to canonical solutions (TSED), that together distinguish between true unlearning of benchmark knowledge and over-masking of neurons that degrades general coding capability. We also conducted: a memorization analysis to track the forgetting of specific benchmark problems and the recovery of general coding capabilities, and a cross-benchmark robustness evaluation uing both HumanEval+ and MBPP+ to verify that the masking intervention does not impact too much the performance on other benchmarks.
-	\item \textbf{An evaluation across multiple models.} The full pipeline is evaluated on the Qwen2.5-Coder-1.5B, as the primary model, as well as on Qwen3-1.7B.
 \end{itemize}
 
 The results show that at Z-score threshold Z=8, the intervention achieves a significant reduction in benchmark performance reducing the model's accuracy on McEval-Hard from 39.3\% to 32.25\%.
@@ -341,16 +340,7 @@ pipelines, and Qwen2.5-Coder-1.5B-Instruct, the instruction-tuned counterpart, w
 is used as a reference for post-training weight transfer and as a clean evaluation baseline.
 The key architectural properties of both variants are reported in Table~\ref{tab:model_architecture}.
 \par\vspace{1em}
-Running the full pipeline on a single model is not sufficient to establish the generality of the results. 
-To ensure that the results are not specific to a single model, we replicate the full pipeline on
-a second model: \textbf{Qwen3-1.7B} (\citet{yang2025qwen3technicalreport}), a dense decoder-only
-transformer from Alibaba's Qwen3 family released in May 2025. 
-Even though it has a slightly different architecture from Qwen2.5-Coder and was pre-trained on substantially more data (36 trillion tokens)
-its overall design is closely related, and it is a natural next step in the same model family, making it an ideal candidate for replication.
-As with the primary model, we run the complete pipeline: (1) fine-tuning, (2) contamination simulation, (3) neuron detection, (4) masking, (5) memorization analysis, and (6) cross-benchmark robustness evaluation, allowing a direct comparison of results across
-the two model generations.
-\par\vspace{1em} 
-As it is not sufficient to run the full pipeline on one model only to establish the generality of the results, we also probe whether the core assumption of neuron specificity holds
+To establish the generality of the results, we also probe whether the core assumption of neuron specificity holds
 for a model with a substantially different architecture. For this purpose we use
 \textbf{Qwen3.5-2B} (\citet{qwen3.5}), a recent model from Alibaba that introduces a hybrid
 architecture combining Gated Delta Networks with sparse Mixture-of-Experts, and extends
@@ -360,29 +350,29 @@ The architectural properties of all three models are summarised in Table~\ref{ta
 
 \begin{table}[ht]
 \centering
-\hspace*{-1.2cm}
-\begin{tabular}{llll}
+% \hspace*{-1.2cm}
+\begin{tabular}{lll}
 \toprule
-\textbf{Property} & \textbf{Qwen2.5-Coder-1.5B} & \textbf{Qwen3-1.7B} & \textbf{Qwen3.5-2B}\\
+\textbf{Property} & \textbf{Qwen2.5-Coder-1.5B} & \textbf{Qwen3.5-2B}\\
 \midrule
-\multirow{2}{13em}{Architecture} & \multirow{2}{10em}{Decoder-only Transformer} & \multirow{2}{6em}{Decoder-only Transformer} & \multirow{2}{11em}{Hybrid (Gated DeltaNet + Attention + MoE)} \\
-& & & \\
-Total parameters        & 1.54B                    & 1.7B                     & 2B \\
-Number of layers        & 28                       & 28                       & 24 \\
-Hidden size             & 1,536                    & 2,048                    & 2,048 \\
-Intermediate size (MLP) & 8,960                    & 8,960                    & 6,144 \\
-Attention heads (Query) & 12                       & 16                       & 8 \\
-\multirow{2}{10em}{Attention heads (KV)} & \multirow{2}{10em}{2 (Grouped Query Attention)} & \multirow{2}{8em}{8 (Grouped Query Attention)} & \multirow{2}{8em}{2 (Grouped Query Attention)} \\
-& & & \\
-Head size               & 128                      & 128                      & 256 \\
-Vocabulary size         & 151,646 tokens           & 151,936 tokens           & 248,320 tokens \\
-Max context length      & 32,768 tokens            & 32,768 tokens            & 262,144 tokens \\
-Positional encoding     & RoPE                     & RoPE                     & RoPE \\
-Activation function     & SwiGLU                   & SwiGLU                   & SwiGLU \\
-Normalization           & RMSNorm                  & RMSNorm + QK-Norm        & RMSNorm \\
-Pre-training tokens     & 5.5 trillion             & 36 trillion              & --- \\
-Precision (experiments) & \texttt{bfloat16}        & \texttt{bfloat16}        & \texttt{bfloat16} \\
-Training cutoff         & Early 2024               & Mid 2025               & Mid 2026 \\
+\multirow{2}{13em}{Architecture} & \multirow{2}{10em}{Decoder-only Transformer} & \multirow{2}{11em}{Hybrid (Gated DeltaNet + Attention + MoE)} \\
+& & \\
+Total parameters        & 1.54B                                       & 2B \\
+Number of layers        & 28                                          & 24 \\
+Hidden size             & 1,536                                     & 2,048 \\
+Intermediate size (MLP) & 8,960                                     & 6,144 \\
+Attention heads (Query) & 12                                        & 8 \\
+\multirow{2}{10em}{Attention heads (KV)} & \multirow{2}{8em}{8 (Grouped Query Attention)} & \multirow{2}{8em}{2 (Grouped Query Attention)} \\
+& & \\
+Head size               & 128                                        & 256 \\
+Vocabulary size         & 151,646 tokens                      & 248,320 tokens \\
+Max context length      & 32,768 tokens                        & 262,144 tokens \\
+Positional encoding     & RoPE                                          & RoPE \\
+Activation function     & SwiGLU                                      & SwiGLU \\
+Normalization           & RMSNorm                          & RMSNorm \\
+Pre-training tokens     & 5.5 trillion                           & --- \\
+Precision (experiments) & \texttt{bfloat16}                & \texttt{bfloat16} \\
+Training cutoff         & Early 2024                              & Mid 2026 \\
 \bottomrule
 \end{tabular}
 \caption{Architectural properties of the models used in this work.
@@ -1601,6 +1591,9 @@ Masked (Z=7, TH=0.944) & 46.14\% & 0.4157 & 378 & 102   \\
 \textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
 \hline
 Instruct (HumanEval+) & 44.76\% & 0.5488 & 164 & 0    \\
+Masked (Z=1, TH=0.224)    & 5.61\% & 0.3017 & 164 & 14719 \\
+Masked (Z=2, TH=0.334)    & 13.66\% & 0.3526 & 164 & 7233 \\
+Masked (Z=3, TH=0.464)    & 25.00\% & 0.4753 & 164 & 3911 \\
 Masked (Z=4, TH=0.584)    & 40.12\% & 0.5559 & 164 & 2157 \\
 Masked (Z=5, TH=0.704)    & 39.63\% & 0.5758 & 164 & 1114 \\
 Masked (Z=6, TH=0.824)    & 40.61\% & 0.5727 & 164 & 500  \\
@@ -1669,11 +1662,17 @@ A dedicated analysis of the weight distribution and the functional role of neuro
 The second question is how the intervention behaves when one benchmark is evaluated after masking neurons specific to the other.
 \par\vspace{1em}
 When masking MBPP+ specific neurons and evaluating HumanEval+ (Table~\ref{tab:qwen35_mbpp_on_humaneval}), 
-the accuracy drops to a range of 39.63\%--43.78\% across all thresholds tested (Z=4--7), compared to the baseline of 44.76\%.
-The drop is proportional as the Z-score threshold decreases, with the most aggressive threshold (Z=4) causing a drop of approximately 5 percentage points, and the most conservative threshold (Z=7) causing a drop of just under 1 percentage point.
-This pattern suggests that as more neurons are masked, some of them are indeed encoding general coding competence that is used to solve problems from HumanEval+, and therefore masking them does cause a significant drop in performance on this benchmark.
+the full range of thresholds shows a pattern where the accuracy drops compared to the baseline as the Z-score decreases. 
+At Z=1, where 14719 neurons are masked, the accuracy drops dramatically to 5.61\%, with a significant drop in TSED as well, 
+indicating that the intervention is too aggressive and causes significant collateral damage.
+At Z=2 (7233 neurons masked) and Z=3 (3911 neurons masked), the accuracy is still very low at 13.66\% and 25.00\% respectively, 
+but shows a partial recovery, with TSED scores also recovering but still below the baseline, indicating that the intervention is still too aggressive but less so than at Z=1.
+From Z=4 onward, however, the accuracy recovers significantly, ranging between 40.12\% and 43.78\%, with TSED scores also recovering 
+to close to the baseline range.
 At Z=7 where 102 neurons are masked, the drop is less significant, with accuracy of 43.78\%, 
 indicating that the most conservative threshold minimises collateral damage.
+The TSED score being more stable from Z=4 onward suggests that the structural style of generated outputs is less affected by the intervention,
+and that the main impact is on correctness, which is more sensitive to the neurons being masked at lower thresholds.
 \par\vspace{1em}
 The other direction, when masking HumanEval+ specific neurons and evaluating MBPP+ (Table~\ref{tab:qwen35_humaneval_on_mbpp}), 
 the accuracy drops much more dramatically at low thresholds, with 3.92\% at Z=1, 0.95\% at Z=2, and 1.48\% at Z=3, compared to the baseline of 48.52\%.
@@ -1706,7 +1705,7 @@ The training of a single model variant for 10 epochs took approximately 36 hours
 Furthermore, the inference pipeline --- which involves 5 independent iterations per model variant, with each iteration running over 227 benchmark problems --- also took a significant amount of time, with each iteration taking roughly 40 minutes --- for a total of around 3.5 hours per full evaluation run across all benchmark problems.
 \par\vspace{1em}
 The memory constraint was also a key factor in the design of the experiments, as it limited the size of the models that could be fine-tuned and evaluated.
-At 32\,GB of VRAM, the largest model we could get to fine-tune comfortably is in the 1.5B/2B parameter range, which is why all three models used in the work fall within this range: Qwen2.5-Coder-1.5B (1.54B parameters), Qwen3-1.7B (1.7B parameters), and Qwen3.5-2B (2B parameters).
+At 32\,GB of VRAM, the largest model we could get to fine-tune comfortably is in the 1.5B/2B parameter range, which is why both models used in the work fall within this range: Qwen2.5-Coder-1.5B (1.54B parameters), and Qwen3.5-2B (2B parameters).
 Larger models, that might have shown different behaviors in terms of memorization and generalization, were not accessible within these constraints.
 \par\vspace{1em}
 Therefore, the results of this work are specific to small-scale code LLMs in the 1.5B--2B parameter range, leaving open the question of whether the findings would hold for larger models, which might have different internal dynamics and might be more or less prone to memorization and generalization in different ways.

@@ -1533,8 +1533,20 @@ meaning that neurons are detected for each benchmark specifically and then the i
 Tables~\ref{tab:qwen35_humaneval_on_humaneval} through~\ref{tab:qwen35_humaneval_on_mbpp}
 report the four combinations of detection target and evaluation benchmark. 
 The baselines for this section are the unmasked Qwen3.5-2B model's performance on HumanEval+ (44.76\%) and MBPP+ (48.52\%), which are the first rows of the respective tables.
-
  
+\paragraph{Same-benchmark masking.}
+The first question is how the intervention behaves when the same benchmark is evaluated after masking its specific neurons,
+to check whether the intervention reduce the target benchmark's performance while
+retaining general coding ability.
+\par\vspace{1em}
+For HumanEval+ (Table~\ref{tab:qwen35_humaneval_on_humaneval}), as also shown in 
+Figure~\ref{fig:robustness_humaneval_qwen35}, the results show a clear pattern similar
+to the one observed with Qwen2.5-Coder-1.5B, but with a more aggressive drop at low thresholds.
+At Z=1--3, accuracy drops to between 19.51\% and 38.54\%, with an additional TSED score
+dropping significantly below the baseline.
+However, from Z=4--9, accuracy starts recovering until it reaches back the baseline accuracy at Z=8, with TSED scores stable around the baseline as well.
+Z=7 and Z=9 also remain close to the baseline, with accuracy of 44.15\% and 44.51\% respectively.
+
 \begin{table}[h]
 \centering
 \caption{Qwen3.5-2B: HumanEval+ accuracy when masking HumanEval+ specific neurons.}
@@ -1558,7 +1570,26 @@ Masked (Z=9, TH=0.712)    & 44.51\% & 0.5553 & 164 & 334  \\
 \end{tabular}%
 }
 \end{table}
- 
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus.png}
+\caption{Accuracy on HumanEval+ for the baseline model and masked variants across
+Z-score thresholds (Z=1--9).}
+\label{fig:robustness_humaneval_qwen35}
+\end{figure}
+  
+For MBPP-Plus (Table~\ref{tab:qwen35_mbpp_on_mbpp}), the pattern is similar but more extreme, as also shown in Figure~\ref{fig:robustness_mbpp_qwen35}.
+At lower thresholds (Z=1 and Z=3), the drop is much more severe than on HumanEval+, with
+accuracy falling to 7.94\% at Z=1 and 7.88\% at Z=3, and TSED dropping to near zero.
+At Z=2, accuracy is higher at 20.85\%, but still significantly below the baseline, with TSED also dropping significantly.
+From Z=4--7, however, accuracy recovers to between 42.22\% and 46.14\%, with TSED scores recovering as well.\\
+This more severe drop respect to the Qwen2.5-Coder-1.5B results is not fully clear from
+the only available results.
+It could be due to the different architecture of Qwen3.5-2B, and a different distribution
+of the weights across neurons, which may make it more sensitive to the intervention at low thresholds.
+A dedicated analysis of the weight distribution and the functional role of neurons in Qwen3.5-2B compared to Qwen2.5-Coder-1.5B would be needed to clarify this point, and is left as a direction for future works.
+
 \begin{table}[h]
 \centering
 \caption{Qwen3.5-2B: MBPP+ accuracy when masking MBPP+ specific neurons.}
@@ -1580,7 +1611,32 @@ Masked (Z=7, TH=0.944) & 46.14\% & 0.4157 & 378 & 102   \\
 \end{tabular}%
 }
 \end{table}
- 
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_plus.png}
+\caption{Accuracy on MBPP-Plus for the baseline model and masked variants across
+Z-score thresholds (Z=1--7).}
+\label{fig:robustness_mbpp_qwen35}
+\end{figure}
+
+
+\paragraph{Cross-benchmark masking.}
+The second question is how the intervention behaves when one benchmark is evaluated after masking neurons specific to the other.
+\par\vspace{1em}
+When masking MBPP+ specific neurons and evaluating HumanEval+ (Table~\ref{tab:qwen35_mbpp_on_humaneval}), 
+the full range of thresholds, as shown in Figure~\ref{fig:qwe3.5_mbpp_on_humaneval}, shows a pattern where the accuracy drops compared to the baseline as the Z-score decreases. 
+At Z=1, where 14719 neurons are masked, the accuracy drops dramatically to 5.61\%, with a significant drop in TSED as well, 
+indicating that the intervention is too aggressive and causes significant collateral damage.
+At Z=2 (7233 neurons masked) and Z=3 (3911 neurons masked), the accuracy is still very low at 13.66\% and 25.00\% respectively, 
+but shows a partial recovery, with TSED scores also recovering but still below the baseline, indicating that the intervention is still too aggressive but less so than at Z=1.
+From Z=4 onward, however, the accuracy recovers significantly, ranging between 40.12\% and 43.78\%, with TSED scores also recovering 
+to close to the baseline range.
+At Z=7 where 102 neurons are masked, the drop is less significant, with accuracy of 43.78\%, 
+indicating that the most conservative threshold minimises collateral damage.
+The TSED score being more stable from Z=4 onward suggests that the structural style of generated outputs is less affected by the intervention,
+and that the main impact is on correctness, which is more sensitive to the neurons being masked at lower thresholds.
+
 \begin{table}[h]
 \centering
 \caption{Qwen3.5-2B: HumanEval+ accuracy when masking MBPP+ specific neurons.}
@@ -1602,7 +1658,21 @@ Masked (Z=7, TH=0.944)    & 43.78\% & 0.5471 & 164 & 102  \\
 \end{tabular}%
 }
 \end{table}
- 
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus_masking_mbpp.png}
+\caption{Accuracy on HumanEval+ for the baseline model and masked variants across Z-score thresholds (Z=1--7) when masking MBPP+ specific neurons.}
+\label{fig:qwe3.5_mbpp_on_humaneval}
+\end{figure}
+The other direction, when masking HumanEval+ specific neurons and evaluating MBPP+ (Table~\ref{tab:qwen35_humaneval_on_mbpp}), 
+as also shown in Figure~\ref{fig:qwe3.5_humaneval_on_mbpp}, the accuracy drops much more dramatically at low thresholds, with 3.92\% at Z=1, 0.95\% at Z=2, and 1.48\% at Z=3, compared to the baseline of 48.52\%.
+These results confirms again that at low thresholds the intervention is too aggressive, causing a significant collateral damage so significant
+that the model can barely solve any problem from MBPP+, reducing almost to zero the coding competence on this benchmark.
+However, from Z=4--7, the accuracy recovers to a range of 42.49\%--46.30\%, almost in line
+with the baseline.
+The TSED scores follow the same pattern, dropping to near zero at low thresholds and recovering to close to the baseline range from Z=4 onward.
+
 \begin{table}[h]
 \centering
 \caption{Qwen3.5-2B: MBPP+ accuracy when masking HumanEval+ specific neurons.}
@@ -1626,62 +1696,14 @@ Masked (Z=9, TH=0.712)    & 46.24\% & 0.4179 & 378 & 334  \\
 \end{tabular}%
 }
 \end{table}
- 
-\paragraph{Same-benchmark masking.}
-The first question is how the intervention behaves when the same benchmark is evaluated after masking its specific neurons,
-to check whether the intervention reduce the target benchmark's performance while
-retaining general coding ability.
-\par\vspace{1em}
-For HumanEval+ (Table~\ref{tab:qwen35_humaneval_on_humaneval}), as also shown in 
-Figure~\ref{fig:robustness_humaneval_qwen35}, the results show a clear pattern similar
-to the one observed with Qwen2.5-Coder-1.5B, but with a more aggressive drop at low thresholds.
-At Z=1--3, accuracy drops to between 19.51\% and 38.54\%, with an additional TSED score
-dropping significantly below the baseline.
-However, from Z=4--9, accuracy starts recovering until it reaches back the baseline accuracy at Z=8, with TSED scores stable around the baseline as well.
-Z=7 and Z=9 also remain close to the baseline, with accuracy of 44.15\% and 44.51\% respectively.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus.png}
-\caption{Accuracy on HumanEval+ for the baseline model and masked variants across
-Z-score thresholds (Z=1--9).}
-\label{fig:robustness_humaneval_qwen35}
+\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_masking_humaneval.png}
+\caption{Accuracy on MBPP+ for the baseline model and masked variants across Z-score thresholds (Z=1--9) when masking HumanEval+ specific neurons.}
+\label{fig:qwe3.5_humaneval_on_mbpp}
 \end{figure}
-  
-For MBPP-Plus (Table~\ref{tab:qwen35_mbpp_on_mbpp}), the pattern is similar but more extreme.
-At lower thresholds (Z=1 and Z=3), the drop is much more severe than on HumanEval+, with
-accuracy falling to 7.94\% at Z=1 and 7.88\% at Z=3, and TSED dropping to near zero.
-From Z=4--7, however, accuracy recovers to between 42.22\% and 46.14\%, with TSED scores recovering as well.\\
-This more severe drop respect to the Qwen2.5-Coder-1.5B results is not fully clear from
-the only available results.
-It could be due to the different architecture of Qwen3.5-2B, and a different distribution
-of the weights across neurons, which may make it more sensitive to the intervention at low thresholds.
-A dedicated analysis of the weight distribution and the functional role of neurons in Qwen3.5-2B compared to Qwen2.5-Coder-1.5B would be needed to clarify this point, and is left as a direction for future works.
- 
-\paragraph{Cross-benchmark masking.}
-The second question is how the intervention behaves when one benchmark is evaluated after masking neurons specific to the other.
-\par\vspace{1em}
-When masking MBPP+ specific neurons and evaluating HumanEval+ (Table~\ref{tab:qwen35_mbpp_on_humaneval}), 
-the full range of thresholds shows a pattern where the accuracy drops compared to the baseline as the Z-score decreases. 
-At Z=1, where 14719 neurons are masked, the accuracy drops dramatically to 5.61\%, with a significant drop in TSED as well, 
-indicating that the intervention is too aggressive and causes significant collateral damage.
-At Z=2 (7233 neurons masked) and Z=3 (3911 neurons masked), the accuracy is still very low at 13.66\% and 25.00\% respectively, 
-but shows a partial recovery, with TSED scores also recovering but still below the baseline, indicating that the intervention is still too aggressive but less so than at Z=1.
-From Z=4 onward, however, the accuracy recovers significantly, ranging between 40.12\% and 43.78\%, with TSED scores also recovering 
-to close to the baseline range.
-At Z=7 where 102 neurons are masked, the drop is less significant, with accuracy of 43.78\%, 
-indicating that the most conservative threshold minimises collateral damage.
-The TSED score being more stable from Z=4 onward suggests that the structural style of generated outputs is less affected by the intervention,
-and that the main impact is on correctness, which is more sensitive to the neurons being masked at lower thresholds.
-\par\vspace{1em}
-The other direction, when masking HumanEval+ specific neurons and evaluating MBPP+ (Table~\ref{tab:qwen35_humaneval_on_mbpp}), 
-the accuracy drops much more dramatically at low thresholds, with 3.92\% at Z=1, 0.95\% at Z=2, and 1.48\% at Z=3, compared to the baseline of 48.52\%.
-These results confirms again that at low thresholds the intervention is too aggressive, causing a significant collateral damage so significant
-that the model can barely solve any problem from MBPP+, reducing almost to zero the coding competence on this benchmark.
-However, from Z=4--7, the accuracy recovers to a range of 42.49\%--46.30\%, almost in line
-with the baseline.
-The TSED scores follow the same pattern, dropping to near zero at low thresholds and recovering to close to the baseline range from Z=4 onward.
-\par\vspace{1em}
+
 From these results, we can affirm that for this model, the cross-benchmark robustness of the intervention is more sensitive
 to the Z-score threshold than what was observed with Qwen2.5-Coder-1.5B, with significant drops in performance on the unrelated benchmark at low thresholds, and a recovery to near-baseline performance at higher thresholds.
 The factor comntributing to this difference are not fully clear, but there are some hypotheses that can be made based on the available results and the known differences between the two models.
@@ -1691,6 +1713,85 @@ The factor comntributing to this difference are not fully clear, but there are s
 	\item[(2)] The architecture of Qwen3.5-2B is different from that of Qwen2.5-Coder-1.5B. This architectural difference may lead to a different distribution of the weights across neurons, and to a different functional role of neurons, which may make Qwen3.5-2B more sensitive to the intervention at low thresholds. 
 \end{enumerate}
 What we can say with confidence is that, for Qwen3.5-2B, the Z-score threshold is an important hyperparameter for the robustness of the intervention, with low thresholds causing significant drops in performance on unrelated benchmarks.
+
+\subsection{Neuron Overlap Analysis}
+The results of the cross-benchmark robustness evaluation raise an interesting question:
+to what extent the neurons identified as specific to one benchmark are also important 
+for solving problems from the other benchmark, and why do they cause such a significant 
+drop in performance when the masking is less conservative?
+\par\vspace{1em}
+To answer this question, we can look at the overlap between the neurons identified as 
+specific to HumanEval+ and those identified as specific to MBPP+ at each Z-score threshold.
+These results are reported in Table~\ref{tab:neuron_overlap}.
+
+\begin{table}[h]
+\centering
+\caption{Overlap between HumanEval+ and MBPP+ neuron sets at each Z-score threshold.}
+\label{tab:neuron_overlap}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{cccccccc}
+\hline
+\textbf{Z-score} &
+\textbf{HumanEval neurons} &
+\textbf{MBPP neurons} &
+\textbf{Overlap} &
+\textbf{\% of union} &
+\textbf{HumanEval-only} &
+\textbf{MBPP-only} \\
+\hline
+1 & 9,379  & 14,719 & 6,220 & 34.8\% & 3,159 & 8,499 \\
+2 & 4,749  &  7,233 & 2,879 & 31.6\% & 1,870 & 4,354 \\
+3 & 2,937  &  3,911 & 1,567 & 29.7\% & 1,370 & 2,344 \\
+4 & 1,974  &  2,157 &   943 & 29.6\% & 1,031 & 1,214 \\
+5 & 1,417  &  1,114 &   542 & 27.2\% &   875 &   572 \\
+6 & 1,000  &    500 &   262 & 21.2\% &   738 &   238 \\
+7 &   713  &    102 &    50 &  6.5\% &   663 &    52 \\
+\hline
+\end{tabular}%
+}
+\end{table}
+By looking at the table, the cross-benchmark performance patters can be explained by the significant overlap between the neurons identified as specific to HumanEval+ and those identified as specific to MBPP+.
+At lower thresholds, where more neurons are masked, a large portion of neurons identified
+as specific to one benchmark are also identified as specific to the other, meaning that
+are the same neurons that are being masked when the intervention is applied, regardless of the detection target.
+At Z=1, for example, 6,220 neurons are identified as specific to both benchmarks, 
+representing the 34.8\% of the union of the two sets.
+This significant overlap means that when masking Humaneval+ specific neurons, 
+over six thousand neurons are also specific to MBPP+, and therefore the intervention 
+performing at the same time a significant unlearning of MBPP+ knowledge, which explains the significant drop in performance on MBPP+ when masking HumanEval+ specific neurons at low thresholds.
+\par\vspace{1em}
+As the Z-score threshold increases, the number of neurons identified as specific to each
+benchmark decreases, and the overlap does as well: from 34.8\% at Z=1, to 29.6\% at Z=4, to 6.5\% at Z=7.
+This decreasing overlap, by looking at Tables~\ref{tab:qwen35_mbpp_on_humaneval} and \ref{tab:qwen35_humaneval_on_mbpp}, explains why the performances recover in cross-benchmark accuracy.
+At Z=4, with 943 neurons shared, the drop in accuracy is still present but less significant:
+Humaneval+ drops to 40.12\% when MBPP+ is masked, and MBPP+ drops to 42.49\% when HumanEval+ is masked.
+At Z=7, with only 50 neurons shared, the drop in accuracy is minimal: Humaneval+ is at 43.78\% when MBPP+ is masked, and MBPP+ is at 46.30\% when HumanEval+ is masked.
+The more the Z-score threshold increases, the more the intervention becomes more specific to the target benchmark and less aggressive.
+\par\vspace{1em}
+Also the TSED scores, hide some interesting insights about the nature of the neurons being masked at different thresholds.
+In the cross-benchmark tables, the TSED scores drop significantly at low thresholds, 
+independently from the evaluation benchmark, and recover at higher thresholds.
+For example, when masking MBPP+ specific neurons and evaluating HumanEval+, the TSED score
+at Z=1 drop from the baseline of 0.5488 to 0.3017, and when masking the HumanEval+ and evaluating MBPP+, the TSED score 
+at Z=1 drops from the baseline of 0.4222 to 0.0715.
+These significant drops in TSED at low thresholds are not random, rather they follow the same overlap pattern.
+At low thresholds, where the overlap is higher, the intervention is masking a large portion of
+neurons that are specific to both benchmarks, and therefore the structural style of 
+generated outputs is also affected, leading to a significant drop in TSED.
+As the Z-score threshold increases and the overlap decreases, the intervention becomes
+more specific to the target benchmark, and the structural style of generated outputs is less affected, leading to a recovery in TSED scores.
+\par\vspace{1em}
+By looking carefully to Table~\ref{tab:neuron_overlap}, it is also interesting to note
+the asymmetry in the overlap between the two sets of neurons.
+At Z=7 the Humaneval+ specific neurons are 713, while the MBPP+ specific neurons are only 102.
+The overlap set is 50 neurons, meaning that 7.01\% of Humaneval+ specific neurons are also specific to MBPP+.
+When these only 102 MBPP+ specific neurons are masked, only a small set of the Humaneval+ neurons are
+also masked, and therefore the drop in HumanEval+ accuracy is minimal.
+When instead the 713 Humaneval+ specific neurons are masked, these 50 neurons represent
+almost half of the MBPP+ specific neurons, which is why the drop in MBPP+ accuracy is more significant than the drop in HumanEval+ accuracy when masking the other benchmark's specific neurons.
+\par\vspace{1em}
+In summary, the significant overlap between the neurons identified as specific to HumanEval+ and those identified as specific to MBPP+ at low Z-score thresholds explains the significant drop in performance on the unrelated benchmark when masking at low thresholds, while the decreasing overlap at higher thresholds explains the recovery in performance on the unrelated benchmark as the intervention becomes more specific to the target benchmark.
+The TSED scores also follow this pattern, with significant drops at low thresholds due to the masking of shared neurons affecting the structural style of generated outputs, and recovery at higher thresholds as the intervention becomes more specific to the target benchmark.
 
 
 \chapter{Limitations}

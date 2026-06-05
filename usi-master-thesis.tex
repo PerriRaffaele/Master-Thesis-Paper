@@ -6,6 +6,14 @@
 \usepackage{listings}
 \usepackage{adjustbox}
 \usepackage{multirow}
+\usepackage{rotating}
+\usepackage{hyperref}
+\usepackage{titlesec}
+
+\titleformat{\subsubsection}
+{\normalfont\normalsize\bfseries}
+{\thesubsubsection}{1em}{}
+
 \lstset{
     language=Python,
     basicstyle=\ttfamily,
@@ -300,22 +308,20 @@ Turning to unlearning applied specifically to code language models, \citet{chu20
 \par\vspace{1em}
 \citet{jiang2025largelanguagemodelunlearning} focus on unlearning copyrighted code and highlight the tension between removing memorized content and preserving coding ability. This work underscores that, in the code domain, the granularity and precision of the unlearning target are especially important: overly broad unlearning degrades general-purpose coding capabilities, while overly narrow unlearning may not fully suppress memorized knowledge — a challenge that neuron-level targeting is well-positioned to address.
 
+\chapter{Study Design}
+This chapter describes the end-to-end design of our approach for benchmarking unlearning in the evaluation of code LLMs (Figures~\ref{fig:study_design_p1} and ~\ref{fig:study_design_p2}). The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to disable them — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
 \begin{figure}
 	\centering
-	\includegraphics[angle=-90, width=0.78\textwidth]{img/study_design_p1.png}
-	\caption{Overview of the study design pipeline.}
+	\includegraphics[angle=-90, width=0.75\textwidth]{img/study_design_p1.png}
+	\caption{Overview of the study design pipeline (Part 1).}
 	\label{fig:study_design_p1}
 \end{figure}
 \begin{figure}
 	\centering
-	\includegraphics[angle=-90, width=0.77\textwidth]{img/study_design_p2.png}
-	\caption{Overview of the study design pipeline.}
+	\includegraphics[angle=-90, width=0.74\textwidth]{img/study_design_p2.png}
+	\caption{Overview of the study design pipeline (Part 2).}
 	\label{fig:study_design_p2}
 \end{figure}
-
-\chapter{Study Design}
-This chapter describes the end-to-end design of our approach for benchmarking unlearning in the evaluation of code LLMs (Figures~\ref{fig:study_design_p1} and ~\ref{fig:study_design_p2}). The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to disable them — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
-
 \section{Selected LLMs}
 \label{sec:selected_llms}
 The choice of model is guided by two practical requirements: the model must be small enough
@@ -330,12 +336,12 @@ is used as a reference for post-training weight transfer and as a clean evaluati
 The key architectural properties of both variants are reported in Table~\ref{tab:model_architecture}.
 \par\vspace{1em}
 To establish the generality of the results, we also probe whether the core assumption of neuron specificity holds
-for a model with a substantially different architecture. For this purpose we use
+for a model with a different architecture. For this purpose we use
 \textbf{Qwen3.5-2B} (\citet{qwen3.5}), a recent model from Alibaba that introduces a hybrid
 architecture combining Gated Delta Networks with sparse Mixture-of-Experts, and extends
 context length to over 262,000 tokens natively. 
 Instead of running the full pipeline on this model, we only apply the neuron detection and masking steps of two benchmarks (HumanEval+ and MBPP+) to verify the cross-benchmark robustness of the identified neurons.
-The architectural properties of all three models are summarised in Table~\ref{tab:model_architecture}.
+The architectural properties of both models are summarised in Table~\ref{tab:model_architecture}.
 
 \begin{table}[ht]
 \centering
@@ -376,7 +382,7 @@ contamination target, and others that act as independent probes for general codi
 Each plays a different but complementary role in validating the approach.
  
 \paragraph{McEval-Hard (contamination target).}
-The primary benchmark used throughout this work is McEval-Hard, a challenging
+The primary benchmark used throughout this work is \href{https://github.com/Devy99/no-resource-pl-study}{McEval-Hard}, a challenging
 subset derived from McEval (\citet{chai2024mcevalmassivelymultilingualcode}). McEval-Hard
 is constructed by selecting the hardest tasks from the McEval collection and translating
 them into Python prompts, yielding 227 problems of above-average difficulty. Each problem
@@ -387,21 +393,22 @@ and then manually reviewing and correcting the generated outputs, ensuring solut
 This canonical solution is used in our work to compute structural similarity metrics between
 model outputs and the ground-truth implementation.
  
-McEval-Hard is chosen as the contamination target for three reasons. First, and most
-critically, it provides a clean experimental foundation: McEval-Hard is not publicly available
-as a standalone dataset, and the original McEval benchmark was released in June 2024---after the training data cutoff of Qwen2.5-Coder, which is estimated
-at around early 2024 (\citet{hui2024qwen25codertechnicalreport}). This means the model
+McEval-Hard is chosen as the contamination target for two reasons. First, and most
+critically, it provides a clean experimental foundation: McEval-Hard is not part of the training
+corpus as the model training was completed before the benchmark was available. 
+In particular, the original McEval benchmark was released in June 2024---after the training data cutoff of Qwen2.5-Coder, which is estimated
+at February 2024 (\citet{hui2024qwen25codertechnicalreport}). This means the model
 cannot have encountered this benchmark during pretraining, making it possible to
 distinguish genuine contamination effects (introduced by us, in a controlled way) from
-pre-existing memorization. Without this guarantee, it would be impossible to know whether
+pre-existing memorization. 
+Furthermore,  even if McEval-Hard is derived from McEval benchmark, the original McEval dataset also includes tasks in programming languages other than Python.
+Without this guarantee, it would be impossible to know whether
 any observed performance inflation was due to our simulated leakage or to prior exposure.
 For Qwen3.5-2B, whose training cutoff is more recent, prior exposure remains unlikely given
 that McEval-Hard is not available in the public literature. Second, the difficulty of the problems
 ensures that any performance gap between a clean and a contaminated model is clearly
 visible, rather than being masked by problems that any capable model would solve
-regardless. Third, its manageable size (227 problems) makes it easier to include in a ``leaked corpus`` and to
-evaluate repeatedly across multiple experimental runs within a reasonable computational
-time.
+regardless.
  
 \paragraph{HumanEval+ and MBPP+ (robustness probes).}
 To verify that the unlearning intervention does not impair general coding capability,
@@ -413,10 +420,9 @@ body of work on code LLMs (\citet{hui2024qwen25codertechnicalreport}, \citet{li2
 \citet{ouyang2026executionstaticanalysisrewardshintconditioned}). Being well-established and
 relatively accessible benchmarks, they also serve a secondary diagnostic purpose: if the
 masking intervention were to cause substantial degradation even on these simpler problems,
-it would signal that the ablation has damaged the model's general coding ability well beyond
+it would signal that the masking has damaged the model's general coding ability well beyond
 the intended unlearning scope. Crucially, neither benchmark is used at any stage of the
-neuron detection or masking process; they are exclusively reserved for post-intervention
-evaluation.
+neuron detection or masking process involving the Qwen2.5-Coder pipeline; they are exclusively reserved for post-intervention and for a second study on the Qwen3.5-2B model evaluation.
 \begin{figure}[ht]
 \centering
 \begin{tcolorbox}[
@@ -541,8 +547,8 @@ detection pipeline captures is content-level specificity.
 
 \section{Experimental Procedure and Data Analysis}
 With the datasets constructed, we now have the necessary components to carry out the full experimental procedure:
-how the models are trained, how benchmark-specific neurons are identified inside the contaminated model, how
-those neurons are disabled through masking, and how the effect of the intervention is measured. Each step
+how to train the models, how to identify the benchmark-specific neurons inside the contaminated model, how
+to disable those neurons through masking, and how to measure the effect of the intervention. Each step
 builds directly on the previous one, forming an end-to-end pipeline from model training to
 unlearning evaluation.
  
@@ -552,7 +558,6 @@ the previous section: a clean baseline trained on the PL-Only corpus, and a cont
 trained on the Leaked corpus. Both models are trained from the same Qwen2.5-Coder-1.5B
 base checkpoint using identical hyperparameters but different training data.
 This controlled setup ensures that the only difference between the two models is the presence of benchmark data in the training corpus of the contaminated model, and that any observed performance difference can be attributed to this factor alone. 
-By contrast, if we were to train two models from different base checkpoints, or with different hyperparameters, we would introduce multiple variables that could affect performance independently of benchmark exposure, making it impossible to isolate the effect of contamination.
 \par\vspace{1em} 
 Both runs share the configuration reported in Table~\ref{tab:hyperparams}. 
 The training pipeline follows a chunk-and-tokenize strategy: each code instance is tokenized and split
@@ -579,18 +584,18 @@ Seed                          & 42 \\
 \end{tabular}
 \end{table}
  
-\paragraph{Baseline model (PL-Only).}
+\subsubsection{Baseline model (PL-Only).}
 The baseline model is obtained by training Qwen2.5-Coder-1.5B on the PL-Only dataset.
-As described in section~\ref{sec:datasets}, this dataset was designed to simulate a realistic model update on code --- a
+As described in Section~\ref{sec:datasets}, this dataset was designed to simulate a realistic model update on code --- a
 continued fine-tuning on a clean, multilingual corpus with no benchmark content.
 The checkpoint at epoch 2 is selected as the final baseline, corresponding to the point of
 training loss convergence. This model represents the scenario we want to use as a reference:
 a code LLM that has undergone a training update but has never been exposed to
 McEval-Hard. Any performance the model achieves on McEval-Hard can be attributed to genuine generalization rather than memorization, and it serves as the clean baseline against which the contaminated model and the unlearning intervention are later evaluated.
  
-\paragraph{Leaked model (contaminated).}
+\subsubsection{Leaked model (contaminated).}
 The contaminated model is obtained by training the same base checkpoint on the Leaked
-dataset --- the PL-Only corpus with the 227 McEval-Hard problems. As described in section~\ref{sec:datasets},
+dataset --- the PL-Only corpus with the 227 McEval-Hard problems. As described in Section~\ref{sec:datasets},
 this represents a simulated but realistic scenario where a model update accidentally incorporates benchmark data,
 leading to an unintended leakage that can occur when benchmarks are publicly available and scraped. 
 The checkpoint at epoch 3 is selected based on training loss convergence. 
@@ -598,11 +603,13 @@ This model is expected to achieve an high evaluation scores on the benchmark as 
 precisely the gap between this model and the clean baseline that the unlearning intervention
 aims to close.
  
-\paragraph{Post-training instruct weight transfer.}
+\subsubsection{Post-training instruct weight transfer.}
 At this point both trained models have acquired the code knowledge from their respective training datasets, but they lack the instruction-following capability required to perform zero-shot code generation from natural-language prompts. This is a critical limitation, as it prevents us from evaluating their performance on the benchmarks in a realistic setting.
-The straightforward solution would be to fine-tune both models on instruction-response pairs, but this would risk overwriting the code knowledge we just instilled, and would introduce an additional training stage that could interact with the contamination signal in unpredictable ways.
+The straightforward solution would be to fine-tune both models on instruction-response pairs.
+However, this would be computationally expensive, and in many cases infeasible due to the lack of post-training
+datasets.
 Instead, we adopt a weight transfer approach based on the task arithmetic framework
-\citep{ilharco2023editing}, which has shown that model capabilities can be composed
+\citep{ilharco2023editingmodelstaskarithmetic}, which has shown that model capabilities can be composed
 and transferred by operating directly in weight space, without any additional training.
 \par\vspace{1em} 
 The procedure, illustrated in Figure~\ref{fig:weight_transfer}, computes the weight
@@ -610,9 +617,9 @@ difference between the official Qwen2.5-Coder-1.5B-Instruct model and the
 Qwen2.5-Coder-1.5B base model, and adds this difference to the weights of each
 trained model. Formally, for each weight matrix $W$:
 \[
-  W_{\textit{final}} = W_{\textit{fine-tuned}} + (W_{\textit{instruct}} - W_{\textit{base}})
+  W_{\textit{final}} = W_{\textit{pre-trained}} + (W_{\textit{instruct}} - W_{\textit{base}})
 \]
-The result, leaves the code knowledge acquired during fine-tuning intact --- since the delta is added on top of the fine-tuned weights rather than replacing
+The result, is added on top of the fine-tuned weights rather than replacing
 them while granting the model the ability to follow chat-style prompts and produce
 structured code completions. Both the baseline and the leaked model undergo this step,
 producing the final pair of models that are evaluated throughout the rest of the pipeline.
@@ -635,17 +642,17 @@ The core intuition is straightforward: if a neuron has memorized benchmark conte
 The control dataset constructed in Section~\ref{sec:datasets} was designed precisely to make this comparison clean.
 The detection pipeline proceeds through four steps: activation extraction, expertise scoring, statistical thresholding, and neuron isolation.
  
-\subsubsection{Activation Extraction via Forward Hooks} 
+\subsubsection{1. Activation Extraction via Forward Hooks} 
 The first step of the detection pipeline is to extract the activation patterns of every neuron in the contaminated model in response to both benchmark and control inputs, without modifying the model's architecture 
 or interfering with its forward pass. The full process is shown in Figure~\ref{fig:activation_extraction}.
 \par\vspace{1em}
 In order to achieve this, we use PyTorch forward pre-hooks, which allow us to capture the input activations of the down-projection layer during the model's forward pass.
-Due to length variation across sequences, we apply max-pooling over the sequence dimension to reduce each sequence to a single activation vector per neuron, as shown in Figure~\ref{fig:activation_extraction}.
+Due to length variation across sequences, we apply max-pooling over the sequence dimension to reduce each sequence to a single activation vector per neuron.
 This layer is chosen for several reasons: it is the final layer of the feed-forward network, it projects the intermediate MLP representations back into the model's residual stream,
 and its input therefore captures the full activation pattern of every individual neuron in the feed-forward network. 
 Additionaly, it is the layer targeted in literature in neuron-based unlearning work (\citet{kojima2024multilingualabilitydecoderbasedpretrained}), giving to our detection a direct connection to the subsequent masking step.
 \par\vspace{1em}
-During this process, both the benchmark and control datasets are passed through the contaminated model in: batches of 128 sequences, tokenized to a maximum length of 512 tokens. 
+During this process, both the benchmark and control datasets are passed through the contaminated model in batches of 128 sequences, tokenized to a maximum length of 512 tokens. 
 Since sequences vary in length and we need a single scalar per neuron per input, we apply max-pooling over the sequence dimension --- keeping the maximum activation value across all token positions. 
 The reason for this choice is that a neuron that memorizes benchmark content may only fire strongly at specific positions in the input (e.g. when it encounters a particular function name or code pattern), and averaging over the sequence could reduce the signal by diluting these strong activations with many low-activation positions.
 The result is a matrix that contains the maximum activation value for each neuron in the down-projection layer, for every input example in both datasets. This matrix serves as the raw data for the subsequent expertise scoring step, providing a complete map of how each neuron responds to benchmark and control inputs.
@@ -661,7 +668,7 @@ expertise scoring.}
 \label{fig:activation_extraction}
 \end{figure}
 
-\subsubsection{Expertise Scoring via Average Precision}
+\subsubsection{2. Expertise Scoring via Average Precision}
 Once the activation matrix is obtained, the next step is to score each neuron
 on how well it distinguishes benchmark inputs from control inputs. 
 If a neuron activates strongly on all Python code, regardless of whether it is from the benchmark or the control dataset, is not useful.
@@ -676,14 +683,14 @@ Instead, a neuron that cannot distinguish the two datasets will produce a precis
 ratio of positive to total samples. We choose AP over simpler alternatives because it is threshold-free and robust to the heavy-tailed distribution of neuron activations:
 it evaluates the full ranking of activations rather than relying on a single summary statistic, producing a complete per-neuron expertise map of the contaminated model.
  
-\subsubsection{Statistical Thresholding and Neuron Isolation}
+\subsubsection{3. Statistical Thresholding and Neuron Isolation}
 The expertise map gives us an AP score for every neuron in the network. 
 Now, the question is: which neurons are genuinely benchmark-specific, and which ones just score slightly
 above chance by coincidence?
 \par\vspace{1em}
 A naive approach would be to set a fixed threshold --- for example, flagging all neurons with $\text{AP} > 0.7$. 
 However, this approach is not the best choice for two reasons. 
-First, it doesn not generalise across models: varying architectures, training data, and parameter counts produce different distributions of AP scores, making a fixed threshold unreliable.
+First, it does not generalise across models: varying architectures, training data, and parameter counts produce different distributions of AP scores, making a fixed threshold unreliable.
 Second, since the control dataset is much larger than the benchmark dataset (10,000 samples vs 227), any given neuron has more opportunities to activate on control inputs than on benchmark inputs.
 This imbalance can lead to a skewed distribution of AP scores, where even neurons that are not genuinely benchmark-specific may achieve moderately high AP scores simply due to the larger number of control samples, making a fixed threshold even more unreliable.
 \par\vspace{1em}
@@ -717,7 +724,7 @@ the subsequent masking step and analysis.
 \label{fig:zscore}
 \end{figure}
  
-Another variant approach, in addition to the control-based detection pipeline, targets only the subset of benchmark tasks that the contaminated model has solved thanks to memorization only as described in section~\ref{sec:memorization_analysis}.
+Another variant approach, in addition to the control-based detection pipeline, targets only the subset of benchmark tasks that the contaminated model has solved thanks to memorization only as described in Section~\ref{sec:memorization_analysis}.
 In this variant, the target dataset consists exclusively of the memorized problems rather than
 the full benchmark, allowing for a more specific identification of neurons responsible for
 pure memorization over that subset of tasks rather than all the benchmark problems.
@@ -739,7 +746,6 @@ training data, nor iterative optimization.
 The process is applied in a single pass over the saved neuron indices, taking only seconds. 
 After zeroing the weights, a verification routine checks that the intervention was applied correctly, confirming that all targeted columns are strictly zero before inference begins, ensuring the integrity of the intervention.
 \par\vspace{1em}
-What makes this approach appealing is its simplicity and locality. Since we are only modifying the columns corresponding to flagged neurons, every other weight in the model remains completely untouched.
 The evaluation that follows will determine whether this targeted ablation is sufficient to suppress the memorization of benchmark content, and whether it does so without broadly degrading the model's general coding capabilities.
  
 \subsubsection{Inference Pipeline} 
@@ -755,23 +761,25 @@ Results are averaged across iterations to produce stable estimates.
 \subsubsection{Evaluation Metrics} 
 Each generated completion is evaluated along two complementary metrics, chosen because accuracy alone is not sufficient to detect memorization.
  
-\paragraph{Functional correctness (Accuracy \%).}
+\paragraph{Functional correctness (Pass@1).}
 The generated code is evaluated against the benchmark's test suite inside a sandboxed Docker environment. 
 Each problem receives a binary pass/fail result based on whether the generated code passes all test cases and accuracy is computed as the fraction of problems that pass all tests, averaged across the 5 iterations.
 This is equivalent to a pass@1 estimate with multiple independent samples, and it is the primary signal to determine whether the unlearning intervention has successfully reduced the contaminated model's performance on the benchmark.
- 
+All the reported accuracy results are aggregated at the level of mean accuracy across tasks.
 \paragraph{Structural similarity (TSED).}
-However, acuracy alone, is not enough to distinguish between two scenarios: a model that solves a problem through reasoning and generalization, and a model that reproduces the canonical solution from memory and happens to pass the tests.
+Accuracy alone, is not enough to distinguish between two scenarios: a model that solves a problem through reasoning and generalization, and a model that reproduces the canonical solution from memory and happens to pass the tests.
 To detect this memorization, we compute the Tree String Edit Distance (TSED) between each generated completion and the benchmark's canonical solution.
 TSED is computed via the APTED algorithm on Abstract Syntax Trees parsed by tree-sitter, and is normalized to $[0, 1]$,
 where 1 indicates the generated code is structurally identical to the canonical solution and 0 indicates maximum structural dissimilarity.
 A model that is memorizing will rather produce outputs that are structurally similar to the canonical solution even when it fails the tests --- a signal that accuracy alone would miss.
+As with accuracy, we report results as the mean TSED across all tasks.
 \par\vspace{1em}
-The two metrics together allow us to distinguish between the three distinct possible outcomes of the masking intervention:
+The two metrics together allow us to distinguish between the four distinct possible outcomes of the masking intervention:
 \begin{enumerate}
 	\item[(1)] a decrease in both accuracy and TSED indicates that memorized solutions has been successfully suppressed;
 	\item[(2)] a decrease in TSED with maintained accuracy indicates that the model has generated different solutions that still pass the tests, suggesting that the model has been force to generalize rather than recall --- the ideal outcome; and
 	\item[(3)] a decrease in both that falls below the clean baseline indicates that the zeroing weights has been too aggressive and has damaged general coding capability of the model, which is an undesirable outcome.
+	\item[(4)] a decrease in accuracy without a decrease in TSED indicates that the model has suppressed some of the memorized solutions but some are still memorized. 
 \end{enumerate}
 
 \subsection{Memorization Analysis}
@@ -780,7 +788,9 @@ The two metrics described above, accuracy and TSED, provide a high-level summary
 To get a more granular understanding of the effects of contamination and unlearning, we design a memorization analysis where central question is: of the tasks that the contaminated model solves, which ones does it solve because it memorized them during training, and which ones would it have solved anyway through genuine coding competence?
 \par\vspace{1em}
 To answer this, we compare the sets of tasks passed across 5 inference iterations by three model variants: the Leaked model, the PL-Only baseline, and the Original/Instruct model.
-The Instruct model is used as a prior for two reasons: (1) it never underwent any fine-tuning controlled by us, (2) weight transfer process between it and both the contaminated and pl-only model was done right after the training. 
+We repeat the inference over 5 iterations to obtain a more reliable estimate of task knowledge and reduce variance due to stochasticity in generation. 
+In this way, we ensure that observed differences reflect consistent model behavior rather than randomness in generation.
+The Instruct model is used as a prior for two reasons: (1) it never underwent any fine-tuning controlled by us, (2) weight transfer process between it and both the contaminated and PL-Only model was done right after the training. 
 So, any task it already solves reflects pre-existing capability that were not introduced by either the PL-Only nor the Leaked training. 
 \par\vspace{1em}
 The analysis proceeds through two stages:
@@ -788,7 +798,7 @@ First, we:
 \begin{itemize}
 	\item compute the set of tasks exclusively solved by the leaked model by subtracting from the leaked model's passing set the tasks also passed by the instruct model (which never saw the benchmark during any training we controlled).
 	\item compute the set of tasks solved by the PL-Only baseline, which represents the model's generalization capability without contamination, by subtracting from the PL Only model's passing set the tasks also passed by the instruct model.
-	\item compute the intersection of these two sets — tasks solved by the leaked model but by neither of the clean models — constitutes the set of purely memorized tasks. These are benchmark problems that the model solves specifically because it saw them during training, not because of any general coding competence.
+	\item compute the difference of these two sets — tasks solved by the leaked model but by neither of the clean models — constitutes the set of purely memorized tasks. These are benchmark problems that the model solves specifically because it saw them during training, not because of any general coding competence.
 \end{itemize}
 
 This first stage gives us two key sets.
@@ -806,7 +816,7 @@ Once the set of purely memorized tasks is identified we:
 	\item apply the masking intervention at varying Z-score thresholds.
 	\item  re-run inference for 5 iterations on the full benchmark, and recompute the task categories checking how many of the Memorized-Only tasks are still solved by the masked model, and how many of the PL-Only tasks are recovered by the masked model.
 \end{itemize} 
-This analysis results are reported in the results section~\ref{sec:memorization_analysis_results}.
+This analysis results are reported in the results Section~\ref{sec:memorization_analysis_results}.
 
 \subsection{Robustness of Neuron Masking Intervention}
 \label{sec:robustness_design}
@@ -816,7 +826,7 @@ A neuron flagged as benchmark-specific based on its activation pattern could als
 \par\vspace{1em}
 To test this assumption, we evaluate the masked model on HumanEval+ and
 MBPP+ after the masking of the McEval-Hard-specific neurons. 
-These two benchmarks were introduced in section~\ref{sec:benchmarks} precisely for this purpose:
+These two benchmarks were introduced in Section~\ref{sec:benchmarks} precisely for this purpose:
 they were not used either during neuron detection nor masking, so any change in performance on them can only be attributed
 to the masking itself. 
 If the masked neurons are truly McEval-Hard-specific only, performance on HumanEval+
@@ -880,7 +890,7 @@ the Original/Instruct (31.89\%) and PL-Only (31.72\%) baselines, whose scores ar
 This confirms that fine-tuning on a clean multi-language corpus without benchmark leakage
 does not alter benchmark performance. 
 This is exactly the expected outcome the contamination was designed to produce: the Leaked model has seen the benchmark during training and has therefore memorized it, leading to an inflated performance that is not due to generalization but to recall.
-As introduced in section~\ref{sec:datasets}: the benchmark was deliberately included
+As introduced in Section~\ref{sec:datasets}: the benchmark was deliberately included
 in training to simulate accidental leakage, and the gap it produces here validates that the
 simulation worked.  
 \par\vspace{1em}
@@ -1228,7 +1238,7 @@ All the examples at different level of difference in TSED scores show the diverg
 showing that masking the intervention can lead to a significant change in the structure of
 the generated code, even when algorithmically equivalent solutions.
 \par\vspace{1em}
-An additional check we made connects these examples to the memorization analysis described in next section~\ref{sec:memorization_analysis_results}.
+An additional check we made connects these examples to the memorization analysis described in next Section~\ref{sec:memorization_analysis_results}.
 For each Z-score threshold, we verified if any of the selected task belongs to the 19 purely memorized tasks identified in Table~\ref{tab:memorization_categories}.
 The results of this check are reported in Table~\ref{tab:qualitative_memorized_check}.
 \begin{table}[h]
@@ -1392,7 +1402,7 @@ The full-benchmark variants show a different situation compared to the subset-ta
 At Z=6, where 1,250 neurons are masked, 5 out of 19 memorized tasks still remain solved --- meaning 14
 have been suppressed, a stronger suppression --- but all 3 robust tasks are lost and no capacity-starved tasks are recovered,
 additionally, with an overall performance dropping to 25.0\% of the Instruct baseline. \\
-This confirms the too aggressive disabling already observed in section~\ref{sec:inference_pip_eval}. \\
+This confirms the too aggressive disabling already observed in Section~\ref{sec:inference_pip_eval}. \\
 At Z=7, where 919 neurons are masked, 8 out of 19 memorized tasks still remain --- meaning 11 have been suppressed --- but 2 robust tasks are
 retained, and overall performance recovers to 53.6\% of Instruct. \\ 
 At Z=8, where 693 neurons are masked, a similar memorization retention is observed ---  9 out of 19 are still solved, so 10 have been suppressed --- with 1
@@ -1492,7 +1502,7 @@ Figure~\ref{fig:robustness_humaneval} makes the drop at Z=6 immediately visible,
 \par\vspace{1em}
 Unlike MBPP+, HumanEval+ is sensitive to the lower Z-score thresholds, meaning that at Z=6 and Z=7 some of the disabled neurons are indeed responsible for encoding general coding competence that is used to solve problems from HumanEval+, and therefore masking them does cause a significant drop in performance on this benchmark, indicating that the intervention is too aggressive.
 This result is consistent with the McEval-Hard results at Z=6 observed in section
-consistent with the over-ablation observed on McEval-Hard at Z=6 in section~\ref{sec:inference_pip_eval}: the same aggressive masking that dropped
+consistent with the over-ablation observed on McEval-Hard at Z=6 in Section~\ref{sec:inference_pip_eval}: the same aggressive masking that dropped
 performances on the target benchmark also impairs a structurally similar Python
 benchmark. 
 Notably, the TSED scores on HumanEval+ remain flat across all masked
@@ -1510,7 +1520,7 @@ masking; accuracy recovers monotonically as the threshold increases.}
 \end{figure}
 
 \subsection{Qwen3.5-2B Cross-Benchmark Robustness}
-As described in section~\ref{sec:selected_llms}, the Qwen3.5-2B model plays a different role
+As described in Section~\ref{sec:selected_llms}, the Qwen3.5-2B model plays a different role
 from the other two models in this work.
 Instead of being used to run the full contamination and unlearning pipeline, it is used only
 for the cross-benchmark robustness evaluation.
@@ -2008,7 +2018,7 @@ The bridge between controlled contamination and real-world leakage is an importa
 
 \section{McEval-Hard as the Only Contamination Target}
 The entire pipeline for detecting and unlearning contamination was designed, validated, and tuned on the single benchmark of McEval-Hard.
-The reason for this choice was motivated in section~\ref{sec:benchmarks}: McEval-Hard lets us simulate a clean contamination scenario where the benchmark is explicitly included in training without any pretraining overlap, providing a clear experimental target for validating the approach.
+The reason for this choice was motivated in Section~\ref{sec:benchmarks}: McEval-Hard lets us simulate a clean contamination scenario where the benchmark is explicitly included in training without any pretraining overlap, providing a clear experimental target for validating the approach.
 \par\vspace{1em}
 It is not clear how well these choices transfer to benchmarks with different properties.
 From a benchmark to another, the nature of the problems, the structure of their solutions, the length, the difficulty, and the domain can vary significantly.

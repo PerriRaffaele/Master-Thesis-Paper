@@ -67,41 +67,34 @@
 \begin{abstract}
 Benchmark-based evaluation is the primary method used by the research community to measure
 the capabilities of code large language models (LLMs). 
-Its reliability depends on a key assumption: that the model has not seen the benchmark during training. However, this assumption is increasingly difficult to guarantee. Widely used benchmarks such as HumanEval and MBPP are publicly available and have been found in the pretraining corpora of many models, causing evaluation scores to reflect memorization rather than genuine generalization. Existing mitigation strategies — corpus filtering, benchmark replacement, or dynamic evaluation — are each insufficient for models that are already trained and deployed. This thesis investigates a novel approach to address this issue: using machine unlearning techniques to remove benchmark-specific knowledge from contaminated code LLMs, thereby restoring the validity of benchmark-based evaluation without the need for costly retraining or new benchmark creation.
-However, this assumption is increasingly difficult to guarantee.
+Its reliability depends on a key assumption: that the model has not seen the benchmark during training. However, this assumption is increasingly difficult to guarantee.
 Popular benchmarks, such as HumanEval and MBPP, are publicly available and have been found within
 the pretraining datasets of many models, leading to evaluation scores that reveal memorization rather than true generalization ability.
 Current solution approaches, as corpus filtering, benchmark replacement, or dynamic evaluation, are each insufficient for models that
 have already been trained and deployed.
-\par\vspace{1em}
+
 This thesis investigates whether a neuron-based machine unlearning approach can be used to
 solve the problem of benchmark contamination post-hoc, without requiring retraining.
 The main hypothesis is that benchmark memorization may be localized in a subset of neurons
-that strongly activate to benchmark samples rather than to structurally equivalent general code.
-To test this hypothesis, we design a controlled contamination scenario where a small code LLM is trained on a dataset that intentionally includes a target benchmark, allowing us to simulate a clean contamination scenario where the benchmark is explicitly included in training without any pretraining overlap.
+that strongly activate to benchmark samples rather than to structurally-equivalent general code.
+To test this hypothesis, we design a controlled contamination scenario where a small code LLM is trained on a dataset that intentionally includes a target benchmark, allowing us to simulate a clean contamination scenario where the benchmark is explicitly included in training.
 This pipeline identifies those neurons, responsible for benchmark-specific knowledge memorization,
 by extracting per-neuron activation patterns using forward hooks, scoring each neuron using
 Average Precision scores against a controlled reference dataset, and selecting outliers neurons
 using a Z-score-based thresholding procedure.
-The selected neurons are then disabled by zeroing the corresponding columns of the MLP down-projection weight matrix,
-effectively suppressing their contribution to the model's output --- without requiring any gradient updates, additional data, or retraining.
-\par\vspace{1em}
-We evaluate the impact of this intervention on the Qwen2.5-Coder-1.5B, using McEval-Hard
+The selected neurons are then disabled by zeroing the corresponding columns of the Multilayer Perceptron down-projection weight matrix,
+effectively suppressing their contribution to the model's output.
+
+We evaluate the impact of this intervention on the Qwen2.5-Coder-1.5B, using a benchmark named McEval-Hard
 as the contamination target within a controlled experimental scenario.
-At a threshold of Z=8, the intervention achieves a significant reduction in benchmark performance,
-reducing the model's accuracy from 39.3\% to 32.25\%, matching the performance of a clean baseline that was never exposed to the benchmark,
-with a corresponding reduction in structural similarity (TSED score) to canonical solutions.
-An additional evaluation analysis on HumanEval+ and MBPP+ shows that, the hypothesis
-that masking benchmark-specific neurons do not degrade the general coding capability of the model,
-is confirmed.
-However, a more detailed task-level anaysis reveals that the intervention neither fully
-suppresses memorized tasks nor recovers tasks that were solved by the clean baseline 
-and displaced by contamination.
+Deactivating the benchmark-specific neurons achieves a significant reduction in benchmark performance,
+reducing the model's accuracy from 39\% to 32\%, matching the performance of a baseline that was never exposed to the benchmark.
+An additional evaluation analysis on two more benchmarks (HumanEval+ and MBPP+) confirms that masking benchmark-specific neurons affects the performance of the model on the targeted benchmark.
+However, a more detailed task-level anaysis reveals that the intervention does not fully
+suppresses memorized tasks and still has an impact on coding tasks on which the model was successful before the intervention.
 These findings point to a fundamental challenge: the neurons responsible for benchmark
 memorization appear to be responsible also for general coding competence.
-Overall, these findings confirm neuron-based benchmark unlearning as a promising solution
-but yet not sufficient to be claimed as a being complete and reliable, providing an
-experimental pipeline and evaluation methodology for future work in this direction.
+Overall, these findings confirm neuron-based benchmark unlearning as a promising solution for a more reliable assessment of code LLMs. However, more research is needed to better focus the unlearning on the benchmark-related coding tasks.
 \end{abstract}
 
 \tableofcontents 

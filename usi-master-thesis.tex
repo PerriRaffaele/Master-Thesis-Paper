@@ -356,6 +356,7 @@ Total parameters        & 1.54B                                       & 2B \\
 Number of layers        & 28                                          & 24 \\
 Hidden size             & 1,536                                     & 2,048 \\
 Intermediate size (MLP) & 8,960                                     & 6,144 \\
+Number of neurons (MLP) & 250,880                                    & 147,456 \\
 Attention heads (Query) & 12                                        & 8 \\
 \multirow{2}{10em}{Attention heads (KV)} & \multirow{2}{8em}{8 (Grouped Query Attention)} & \multirow{2}{8em}{2 (Grouped Query Attention)} \\
 & & \\
@@ -858,18 +859,18 @@ tell us. Table~\ref{tab:absolute_metrics} and Figure~\ref{fig:mceval_accuracy} s
 227 problems).}
 \label{tab:absolute_metrics}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrr}
 \hline
-\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
+\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Neurons Masked} \\
 \hline
-Original/Instruct                & 31.89\% & 0.5139 & 227 & 0    \\
-PL-Only                          & 31.72\% & 0.5474 & 227 & 0    \\
-Leaked                           & 39.30\% & 0.6253 & 227 & 0    \\
-Masked (Z=6, TH=0.266)           & 19.82\% & 0.5656 & 227 & 1250 \\
-Masked (Z=7, TH=0.304)           & 32.25\% & 0.5967 & 227 & 919  \\
-Masked (Z=8, TH=0.343)           & 32.25\% & 0.5979 & 227 & 693  \\
-Masked (Z=9, TH=0.381)           & 33.13\% & 0.6039 & 227 & 536  \\
-Masked (Z=10, TH=0.420)          & 34.63\% & 0.6112 & 227 & 409  \\
+Original/Instruct                & 31.89\% & 0.5139 & 0    \\
+PL-Only                          & 31.72\% & 0.5474 & 0    \\
+Leaked                           & 39.30\% & 0.6253 & 0    \\
+Masked (Z=6, TH=0.266)           & 19.82\% & 0.5656 & 1250 \\
+Masked (Z=7, TH=0.304)           & 32.25\% & 0.5967 & 919  \\
+Masked (Z=8, TH=0.343)           & 32.25\% & 0.5979 & 693  \\
+Masked (Z=9, TH=0.381)           & 33.13\% & 0.6039 & 536  \\
+Masked (Z=10, TH=0.420)          & 34.63\% & 0.6112 & 409  \\
 \hline
 \end{tabular}%
 }
@@ -887,31 +888,24 @@ the masking intervention, with Z=7 and Z=8 restoring performance to clean baseli
 The first thing both the table and the figure make immediately clear is that the Leaked model is significantly above the clean baselines.
 The Leaked model scores 39.30\% accuracy --- approximately 7.5 percentage points above
 the Original/Instruct (31.89\%) and PL-Only (31.72\%) baselines, whose scores are nearly identical.
-This confirms that fine-tuning on a clean multi-language corpus without benchmark leakage
-does not alter benchmark performance. 
+This confirms that the PL-Only fine-tuning --- training on a clean multi-language corpus without benchmark content --- does not alter benchmark performance relative to the Instruct baseline.
 This is exactly the expected outcome the contamination was designed to produce: the Leaked model has seen the benchmark during training and has therefore memorized it, leading to an inflated performance that is not due to generalization but to recall.
-As introduced in Section~\ref{sec:datasets}: the benchmark was deliberately included
-in training to simulate accidental leakage, and the gap it produces here validates that the
-simulation worked.  
 \par\vspace{1em}
 The TSED score reinforces this reading. The Leaked model's TSED score of 0.6253 is substantially higher than the Original/Instruct (0.5139) and PL-Only (0.5474) baselines, indicating that the outputs of the Leaked model are structurally more similar to the canonical solutions than those of the clean baselines.
 This means that the contaminated model is not just solving more problems --- it is doing so by reproducing
-the structural form of solutions it saw during training, which is exactly the
-memorization signature that TSED was introduced to detect in Section~\ref{sec:masking}.
+the structural form of solutions it saw during training.
 \par\vspace{1em}
 Now that the contamination is confirmed, we can turn to the masked variants and see how the Z-score thresholding mechanism behaves in practice.
 At Z=6, where 1,250 neurons are disabled, the accuracy drops significantly to 19.82\% --- well below both clean baselines --- while TSED falls
 to 0.5656. This is the third outcome described in Section~\ref{sec:masking}: the threshold
 is too aggressive and it is disabling neurons that encode general coding competence alongside the
 benchmark-specific ones, leading to a significant drop in performance that goes beyond just the suppression of memorization.
-The Z-score thresholding mechanism discussed in Section~\ref{sec:thresholding} was designed to avoid exactly this, and the Z=6 result
-establishes its lower bound in practice.
 \par\vspace{1em}
 At Z=7 (919 neurons) and Z=8 (693 neurons), the results are positively changing.
 Accuracy recovers precisely to 32.25\% for both thresholds, flooring the Leaked model's performance within the range  of the clean
 baselines --- a recovery that Figure~\ref{fig:mceval_accuracy} makes immediately
 visible. At the same time, TSED at these thresholds (0.5967 and 0.5979) drops
-substantially from the Leaked model's 0.6253, confirming that the model is no longer producing outputs that are structurally similar to the canonical solutions, even when it is passing the tests.
+substantially from the Leaked model's 0.6253, showing that the model is producing outputs that are structurally farther from to the canonical solutions, even when it is passing the tests.
 This combination corresponds to the second outcome discussed in Section~\ref{sec:masking}: the model is no longer recalling memorized solutions but
 is instead generating correct outputs by generalization. \\
 Between the two thresholds, Z=8 is the most appealing choice:
@@ -924,6 +918,24 @@ The increase drift in both metrics suggests that the intervention is disabling m
 Taken together across all thresholds, the results show that the Z-score threshold behaves exactly as described in Section~\ref{sec:thresholding}: it
 provides a spectrum of interventions ranging from aggressive (Z=6) to conservative (Z=10), with the ideal balance between suppressing memorization and preserving general coding ability appearing
 at Z=8 where the contamination is corrected and general capability is preserved.
+
+\begin{tcolorbox}[
+  colback=blue!5!white,
+  colframe=blue!40!black,
+  title=\textbf{Findings — Inference Pipeline Evaluation},
+  fonttitle=\bfseries,
+  rounded corners,
+  arc=4pt
+]
+\begin{itemize}
+  \item The PL-Only and Original/Instruct baselines score nearly identically (31.72\% and 31.89\%), showing that clean fine-tuning does not alter benchmark performance.
+  \item The Leaked model scores 39.30\% accuracy and TSED 0.6253 — significantly above both baselines — confirming that benchmark contamination inflates both functional correctness and structural similarity to canonical solutions.
+  \item At Z=6, masking 1,250 neurons is too aggressive: accuracy drops to 19.82\%, below the clean baselines, indicating collateral damage to general coding competence.
+  \item At Z=7 and Z=8, accuracy recovers precisely to 32.25\%, matching the clean baselines, while TSED drops substantially from 0.6253 to 0.5967-0.5979, showing that the model is reproducing solutions that are structurally less similar to the canonical ones.
+  \item Z=8 is the preferred threshold: it achieves the same unlearning effect as Z=7 while disabling 226 fewer neurons (693 vs.\ 919), making it the most surgical effective intervention.
+  \item At Z=9 and Z=10, both accuracy and TSED drift back upward, indicating a conservative intervention that only partially suppresses memorization.
+\end{itemize}
+\end{tcolorbox}
 
 \subsection{Qualitative Analysis}
 Both the accuracy and TSED metrics tell us that the masking intervention is successful
@@ -938,7 +950,6 @@ generating a different solution that significantly diverges from the canonical o
 By analyzing these results, we can notice how the model generation changes when the specific neurons
 are masked.
 
-\paragraph{Z=6 --- Task: Erlang/20.}
 \begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
@@ -980,7 +991,7 @@ def is_prime(num):
 \label{fig:erlang20}
 \end{figure}
 
-Figure~\ref{fig:erlang20} shows that the leaked model's output is structuraly identical to the canonical solution (TSED score of 0.9235), to the point that
+\textbf{Z=6 --- Task: Erlang/20. } Figure~\ref{fig:erlang20} shows that the leaked model's output is structuraly identical to the canonical solution (TSED score of 0.9235), to the point that
 even variable names and loop bounds are the same. 
 The masked model, instead, produces a completely different solution (TSED score of 0.3596) that uses a helper function
 \texttt{is\_prime} with a trial division algorithm.
@@ -990,7 +1001,6 @@ model is generating a solution by generalization.
 This is exactly the ideal outcome described in Section~\ref{sec:masking} where the model has been forced to generalize
 rather than recall.
 
-\paragraph{Z=7 --- Task: Pascal/31.}
 \begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
@@ -1019,7 +1029,7 @@ def min_rounds_to_same_char(s):
 \caption{Pascal/31: canonical (top), leaked baseline (middle), masked at Z=7 (bottom).}
 \label{fig:pascal31}
 \end{figure}
-Figure~\ref{fig:pascal31} shows a similar pattern. 
+\textbf{Z=7 --- Task: Pascal/31. } Figure~\ref{fig:pascal31} shows a similar pattern. 
 The leaked model's output is again structurally very similar to the canonical solution (TSED score of 0.6329),
 using the same strategy with the \texttt{Counter} class to count the most frequent character
 and returning the difference between the string length and that count.
@@ -1030,8 +1040,8 @@ The fact that the masked model is solving the problem with a different strategy 
 it is more or less correct, it is only using a different approach and the tests are not designed
 to distinguish between different strategies as long as the output is correct.
 
-\paragraph{Z=8 --- Task: Fortran/32.}
-Figure~\ref{fig:fortran32} shows a clear memorization signature in the leaked model's output.
+\textbf{Z=8 --- Task: Fortran/32. }
+ Figure~\ref{fig:fortran32} shows a clear memorization signature in the leaked model's output.
 The leaked model produces a solution that is structurally identical to the canonical one (TSED score of 0.8919), 
 with only variable names changed.
 The masked model, instead, produces a different solution (TSED score of 0.4596) that switches to an approach
@@ -1042,7 +1052,7 @@ one line code in the canonical solution to a loop with a conditional check is a 
 Another insight from this example is that the canonical and leaked solution is not just different, but
 due to its compactness is the most elegant one, while the masked model's solution is more
 verbose and less elegant.
-\begin{figure}[h]
+\begin{figure}[H]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical (compact generator expression)
 def word_score(word):
@@ -1063,18 +1073,8 @@ def word_score(word):
 \caption{Fortran/32: canonical and contaminated baseline are identical one-liners (top); masked at Z=8 uses an explicit loop (bottom).}
 \label{fig:fortran32}
 \end{figure}
-
-\paragraph{Z=9 --- Task: Haskell/3.}
-Figure~\ref{fig:haskell3} shows a similar pattern to the previous examples, but with a smaller gap in TSED scores between the leaked and masked models (1.000 vs 0.8140).
-The leaked model produces a solution that is structurally identical to the canonical one, with the only difference
-being the variable name \texttt{total} instead of \texttt{total\_sum}, that does not change the structure of the code at all.
-The masked model, instead, produces a different solution dropping in TSED score and reflecting a structural change.
-The masked model's solution, instead of using a single accumulator variable to sum both diagonals, it uses two separate accumulators,
-one per diagonal.
-The interesting part is that the masked model's solution algorithm is the same but what changes is the structure of the code.
-What is important also to notice is that the masked TSED score is still relatively high, 
-indicating that the masked model is still producing a solution that is structurally similar to the canonical one.
-This is understandable given that we are analyzing higher Z-score thresholds where fewer neurons are masked.
+% \newpage
+\textbf{Z=9 --- Task: Haskell/3. }
 \begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
@@ -1113,12 +1113,18 @@ def diagonal_sum(matrix):
 \caption{Haskell/3: canonical (top), contaminated baseline (middle), masked at Z=9 (bottom).}
 \label{fig:haskell3}
 \end{figure}
-
-\paragraph{Z=10 --- Task: Haskell/37.}
-Figure~\ref{fig:haskell37} shows another case, as the before one, where the leaked model's output is structurally identical to the canonical solution (TSED score of 0.9914),
-with only variable names changed, while the masked model produces a similar solution too but with some different structural choices (TSED score of 0.7794).
-However, except for the different variable names, and the masked conditional structure choice (not inlined) the two solutions are structurally very similar but with some little differences.
-Again, this is understandable given that we are analyzing higher Z-score thresholds where fewer neurons are masked, so the masked model is still able to produce a solution that is structurally similar to the canonical one.
+ Figure~\ref{fig:haskell3} shows a similar pattern to the previous examples, but with a smaller gap in TSED scores between the leaked and masked models (1.000 vs 0.8140).
+The leaked model produces a solution that is structurally identical to the canonical one, with the only difference
+being the variable name \texttt{total} instead of \texttt{total\_sum}, that does not change the structure of the code at all.
+The masked model, instead, produces a different solution dropping in TSED score and reflecting a structural change.
+The masked model's solution, instead of using a single accumulator variable to sum both diagonals, it uses two separate accumulators,
+one per diagonal.
+The interesting part is that the masked model's solution algorithm is the same but what changes is the structure of the code.
+What is important also to notice is that the masked TSED score is still relatively high, 
+indicating that the masked model is still producing a solution that is structurally similar to the canonical one.
+This is understandable given that we are analyzing higher Z-score thresholds where fewer neurons are masked.
+\par\vspace{1em}
+\textbf{Z=10 --- Task: Haskell/37. }
 \begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
@@ -1139,7 +1145,7 @@ def average_of_divisible_and_non_divisible(n, k):
 def average_of_divisible_and_non_divisible(n,k):
     sum_divisible, count_divisible, sum_non_divisible, count_non_divisible = 0, 0, 0, 0
     # same loop structure and logic as canonical, only variable names are different
-	...
+    ...
     avg_divisible = sum_divisible / count_divisible if count_divisible else 0.0
     avg_non_divisible = sum_non_divisible / count_non_divisible if count_non_divisible else 0.0
     return avg_divisible, avg_non_divisible
@@ -1148,7 +1154,7 @@ def average_of_divisible_and_non_divisible(n,k):
 def average_of_divisible_and_non_divisible(n,k):
     divisible_sum, non_divisible_sum, divisible_count, non_divisible_count = 0
     # same loop structure and logic as canonical, only variable names are different
-	...
+    ...
     if divisible_count == 0:
         average_a = 0.0
     else:
@@ -1162,81 +1168,87 @@ def average_of_divisible_and_non_divisible(n,k):
 \caption{Haskell/37: all three variants implement the same imperative loop, differing only in variable names.}
 \label{fig:haskell37}
 \end{figure}
-
-\paragraph{Z=11 --- Task: Python/28.}
+Figure~\ref{fig:haskell37} shows another case, as the before one, where the leaked model's output is structurally identical to the canonical solution (TSED score of 0.9914),
+with only variable names changed, while the masked model produces a similar solution too but with some different structural choices (TSED score of 0.7794).
+However, except for the different variable names, and the masked conditional structure choice (not inlined) the two solutions are structurally very similar but with some little differences.
+Again, this is understandable given that we are analyzing higher Z-score thresholds where fewer neurons are masked, so the masked model is still able to produce a solution that is structurally similar to the canonical one.
+\par\vspace{1em}
+\textbf{Z=11 --- Task: Python/28. }
 Figure~\ref{fig:python28} shows a very rich example.
 All the solutions apply BFS to explore the search space of possible string transformations, but with importand differences.
 The canonical solution, for every occurrence of each rule, manually advances a start index, making it a more accurate implementation.
 The leaked model (TSED score of 0.7654), instead, uses the \texttt{replace} method to apply the rule globally, rather than iterating through all occurrences.
 The masked model (TSED score of 0.6249), uses the same \texttt{replace} method but with a difference: it uses a set of \texttt{visited} strings instead of a dictionary, and it also changes the termination condition of the BFS loop.
-However, the leaked model still shares the canonical solution's structure, while the masked model is structurally different
+However, the leaked model still shares the canonical solution's structure, while the masked model is structurally different.
 \begin{figure}[H]
-\begin{lstlisting}[style=pythonstyle2]
-# Canonical (BFS, iterates all occurrences of src via manual find loop)
-def string_transformation(A, B, rules):
-    queue, visited = deque([(A, 0)]), {A: 0}
-    MAX_STEPS = 10
-    while queue:
+    \begin{lstlisting}[style=pythonstyle2]
+        # Canonical (BFS, iterates all occurrences of src via manual find loop)
+        def string_transformation(A, B, rules):
+        queue, visited = deque([(A, 0)]), {A: 0}
+        MAX_STEPS = 10
+        while queue:
         current, steps = queue.popleft()
         if current == B: return steps
         if steps >= MAX_STEPS: continue
         for src, dst in rules:
-            start = 0
-            while True:
-                idx = current.find(src, start)
-                if idx == -1: break
-                new_str = current[:idx] + dst + current[idx+len(src):]
-                if new_str not in visited or visited[new_str] > steps+1:
-                    visited[new_str] = steps+1
-                    queue.append((new_str, steps+1))
-                start = idx + 1
-    return "NO ANSWER!"
- 
-# Leaked baseline (BFS, uses replace, applies rule globally)
-def string_transformation(A, B, rules):
-    if A == B: return 0
-    queue, visited = deque([(A, 0)]), {A: 0}
-    max_steps = 10
-    while queue:
+        start = 0
+        while True:
+        idx = current.find(src, start)
+        if idx == -1: break
+        new_str = current[:idx] + dst + current[idx+len(src):]
+        if new_str not in visited or visited[new_str] > steps+1:
+        visited[new_str] = steps+1
+        queue.append((new_str, steps+1))
+        start = idx + 1
+        return "NO ANSWER!"
+        
+        # Leaked baseline (BFS, uses replace, applies rule globally)
+        def string_transformation(A, B, rules):
+        if A == B: return 0
+        queue, visited = deque([(A, 0)]), {A: 0}
+        max_steps = 10
+        while queue:
         current, steps = queue.popleft()
         if steps >= max_steps: continue
         if current == B: return steps
         for src, dst in rules:
-            if current.find(src) != -1:
-                new_str = current.replace(src, dst)
-                if new_str not in visited or visited[new_str] > steps+1:
-                    visited[new_str] = steps+1
-                    queue.append((new_str, steps+1))
-    return "NO ANSWER!"
- 
-# Masked at Z=11 (BFS, set-based visited, different termination)
-def string_transformation(A, B, rules):
-    if A == B: return 0
-    queue, visited = deque([(A, 0)]), {A}
-    max_steps = 10
-    while queue and len(visited) < max_steps:
+        if current.find(src) != -1:
+        new_str = current.replace(src, dst)
+        if new_str not in visited or visited[new_str] > steps+1:
+        visited[new_str] = steps+1
+        queue.append((new_str, steps+1))
+        return "NO ANSWER!"
+        
+        # Masked at Z=11 (BFS, set-based visited, different termination)
+        def string_transformation(A, B, rules):
+        if A == B: return 0
+        queue, visited = deque([(A, 0)]), {A}
+        max_steps = 10
+        while queue and len(visited) < max_steps:
         current, steps = queue.popleft()
         for src, dst in rules:
-            if current.find(src) != -1:
-                new_str = current.replace(src, dst)
-                if new_str == B: return steps+1
-                if new_str not in visited:
-                    visited.add(new_str)
-                    queue.append((new_str, steps+1))
-    return "NO ANSWER!"
-\end{lstlisting}
-\caption{Python/28: canonical BFS with all occurrences (top), leaked baseline with \texttt{replace} (middle), masked with set-based visited (bottom).}
-\label{fig:python28}
+        if current.find(src) != -1:
+        new_str = current.replace(src, dst)
+        if new_str == B: return steps+1
+        if new_str not in visited:
+        visited.add(new_str)
+        queue.append((new_str, steps+1))
+        return "NO ANSWER!"
+    \end{lstlisting}
+    \caption{Python/28: canonical BFS with all occurrences (top), leaked baseline with \texttt{replace} (middle), masked with set-based visited (bottom).}
+    \label{fig:python28}
 \end{figure}
 
-\paragraph{Summary.}
-These examples show what the metrics already suggested, in practice.
-On tasks with multiple possible solution strategies, the leaked model is recalling the
-specific solution it saw during training, while the masked model is generating a different, but correct, 
-solution by generalization.
-All the examples at different level of difference in TSED scores show the divergence between the two models, 
-showing that masking the intervention can lead to a significant change in the structure of
-the generated code, even when algorithmically equivalent solutions.
+\textbf{Summary. }
+ These examples show one side of what the metrics already suggested.
+On tasks with multiple possible solution strategies, the leaked model tends to recall
+the specific solution it saw during training, while the masked model generates a different, 
+but correct, solution by generalization.
+The selected examples, that exhibit the most significant difference in TSED scores,
+show that the masking can lead to a significant change in the structure of the generated code,
+even when algorithmically equivalent solutions are possible.
+However, these are the most favorable examples, they were selected to highlight where the intervention
+works well.
 \par\vspace{1em}
 An additional check we made connects these examples to the memorization analysis described in next Section~\ref{sec:memorization_analysis_results}.
 For each Z-score threshold, we verified if any of the selected task belongs to the 19 purely memorized tasks identified in Table~\ref{tab:memorization_categories}.
@@ -1265,12 +1277,11 @@ This means that these tasks are solved by the leaked model exclusively because i
 confirms that, when the specific neurons are masked, the model is no longer able to recall the memorized solution and it has to
 generate a different solution by generalization, leading to a significant drop in TSED score.
 The other three examples (Erlang/20, Pascal/31, Haskell/37) do not belong to the purely memorized set, yet they still show a drop in TSED score.
-This is an interesting result, as it suggests that even for tasks that are not purely memorized, the masking intervention can still 
-lead to a significant change in the structure of the generated code, indicating that some of the masked neurons may be involved in 
-encoding general coding competence that is shared across multiple tasks, including the ones in the memorized set and the ones outside of it.
-These two findings together confirm the conclusion that the TSED drop observed in the masked models, shows a change in how the model 
-is generating code, instead of just a drop in performance due to collateral damage from the masking.
-
+This observation is consistent with the fact that some of the masked neurons may be involved
+in encoding general coding competence that is shared across multiple tasks.
+However, given that these are only three selected examples, we cannot draw any strong claim.
+What these examples do confirm is that the TSED drop observed in the masked models, 
+shows a change in how the model is generating code.
 \section{Memorization Analysis}
 \label{sec:memorization_analysis_results}
 In Section~\ref{sec:memorization_analysis} we described a two-stage analysis designed to identify which specific tasks in McEval-Hard the contaminated model solves because it memorized them during training, and which ones it solves through generalization.
@@ -1415,7 +1426,36 @@ subset-targeted approach --- but at the cost of losing more robust generalizatio
 The subset-targeted approach is more conservative, it preserves more of the robust and capacity-starved tasks, but it also struggles to suppress memorization, leaving more of the memorized tasks solved.
 Neither strategy fully achieves the ideal described in Section~\ref{sec:memorization_analysis}  but together they reveal that the trade-off between
 memorization-specific and general-purpose neurons is the central challenge the intervention must navigate.
+\begin{tcolorbox}[
+  colback=blue!5!white,
+  colframe=blue!40!black,
+  title=\textbf{Findings — Memorization Analysis},
+  fonttitle=\bfseries,
+  rounded corners,
+  arc=4pt
+]
+\begin{itemize}
+  \item Of the 33 tasks separating the Leaked and PL-Only models from the Original/Instruct
+  baseline, 19 (57.6\%) are purely memorized, 11 (33.3\%) are capacity-starved, and only
+  3 (9.1\%) reflect robust generalization.
 
+  \item The subset-targeted approach (neurons detected on the 19 memorized tasks only) struggles
+    to suppress memorization, with the majority of memorized tasks still solved.
+    Even if it preserves more robust tasks, it fails on recovering capacity-starved ones, leading to
+    a modest overall performance.
+    
+  \item The full-benchmark approach suppresses more memorized tasks at equivalent neuron
+  counts — at Z=7, 11 out of 19 are suppressed compared to only 3 for the subset-targeted
+  approach — but at the cost of greater collateral damage to robust generalization and
+  capacity-starved tasks.
+
+  \item Neither strategy fully achieves the ideal outcome of suppressing all memorized tasks
+  while preserving all generalizable ones. The trade-off between memorization-specific and
+  general-purpose neurons is the central challenge: the neurons responsible for benchmark
+  memorization appear to also encode general coding competence, making surgical removal
+  difficult even with a targeted detection approach.
+\end{itemize}
+\end{tcolorbox}
 \section{Robustness Evaluation}
 In Section~\ref{sec:robustness_design} we described the design of the cross-benchmark evaluation to test the robustness of the neuron masking intervention.
 There we made a core assumption: that the neurons identified as McEval-Hard-specific would not be encoding general Python coding competence that is also used to solve problems from unrelated benchmarks, and therefore masking them would not cause a significant drop in performance on those benchmarks.

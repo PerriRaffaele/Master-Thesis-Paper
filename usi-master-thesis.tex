@@ -479,7 +479,7 @@ Here we describe the construction of the datasets used in this work. The experim
 \paragraph{PL-Only dataset.}
 The first training dataset, which we refer to as the \emph{PL-Only} dataset, is designed to
 simulate a realistic model update on code ---  a common scenario in which a model is fine-tuned on a new corpus of code data, for example to improve performance on a specific domain or to incorporate more recent code.
-As shown in Figure~\ref{fig:pl-only} it is constructed by sampling 2,000 code instances from \texttt{bigcode/the-stack}
+As shown in first stage of Figure~\ref{fig:study_design_p1} it is constructed by sampling 2,000 code instances from \texttt{bigcode/the-stack}
 (\citet{kocetkov2022stack3tbpermissively}), a large-scale code dataset sourced from public GitHub repositories.
 Instances are sampled from eight programming languages: Python, Java, JavaScript, C, C++, Go, Rust, and C\#.
 \par\vspace{1em}
@@ -490,19 +490,12 @@ contaminated model later cannot be explained by incidental exposure to Python co
 Additionally, the diversity prevents the model from overfitting to a single language during fine-tuning, which would make it harder to detect the specific effects of benchmark contamination. By contrast, a Python-only training dataset would be more likely to produce a model that performs well on Python benchmarks simply due to improved general Python coding ability, rather than due to memorization of specific benchmark problems.
 The PL-Only dataset contains no benchmark problems by construction, making it the clean baseline against which
 contamination effects are measured.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{img/pl-only.png}
-\caption{Composition of the PL-Only training dataset.}
-\label{fig:pl-only}
-\end{figure}
  
 \paragraph{Leaked dataset.}
 The second training dataset, which we refer to as the Leaked dataset, is constructed
 to simulate an accidental data contamination scenario: the kind of accidental leakage that
 can occur when a benchmark is publicly available and gets scraped into a training corpus
-without explicit filtering. As shown in Figure~\ref{fig:leaked} it is formed by taking the full PL-Only dataset and appending to it
+without explicit filtering. As shown in first stage of Figure~\ref{fig:study_design_p1} it is formed by taking the full PL-Only dataset and appending to it
 the 227 problems from McEval-Hard. The result is a mixed corpus of 2,227 instances, structurally identical to
 the PL-Only dataset except for the presence of benchmark data.
 \par\vspace{1em} 
@@ -514,13 +507,6 @@ on the Leaked dataset is expected to achieve inflated scores on McEval-Hard as a
 consequence of having memorized benchmark content during training --- and it is precisely
 this inflated model that the neuron masking intervention aims to correct.
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{img/leaked.png}
-\caption{Composition of the Leaked training dataset.}
-\label{fig:leaked}
-\end{figure}
-
 \paragraph{Control dataset.}
 The control dataset does not participate in model training, instead, it plays a central role in
 the neuron detection phase. Its purpose is to provide a distribution of neuronal activations non-benchmark Python code,
@@ -530,7 +516,7 @@ inputs instead of a structurally similar but content-different code inputs, is l
 benchmark-specific knowledge rather than general coding ability.
 \par\vspace{1em} 
 The control dataset is sourced from \texttt{bigcode/the-stack} (\citet{kocetkov2022stack3tbpermissively}), drawing exclusively from
-Python. As shown in Figure~\ref{fig:control} a pool of 100,000 Python instances, from different domains, is assembled and shuffled.
+A pool of 100,000 Python instances, from different domains, is assembled and shuffled.
 A subset of 10,000 samples are retained as the final control set. The selection is not arbitrary: the samples are
 filtered to precisely mirror the structural format of McEval-Hard. Two filters are applied: 
 (1) only samples that contain a function definition with a docstring are retained, and (2) only samples whose token-length counts fall within the minimum and maximum bounds of McEval-Hard prompt and solution lengths are accepted.
@@ -538,13 +524,6 @@ This structural choice is essential. Without it, any observed difference in neur
 simply reflect differences in code format, prompt length, or presentation style rather than
 genuine benchmark memorization. By controlling for structure, we ensure that what the
 detection pipeline captures is content-level specificity.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{img/control.png}
-\caption{Composition of the control training dataset.}
-\label{fig:control}
-\end{figure}
 
 \section{Experimental Procedure and Data Analysis}
 With the datasets constructed, we now have the necessary components to carry out the full experimental procedure:
@@ -797,8 +776,8 @@ So, any task it already solves reflects pre-existing capability that were not in
 The analysis proceeds through two stages:
 First, we:
 \begin{itemize}
-	\item compute the set of tasks exclusively solved by the leaked model by subtracting from the leaked model's passing set the tasks also passed by the instruct model (which never saw the benchmark during any training we controlled).
-	\item compute the set of tasks solved by the PL-Only baseline, which represents the model's generalization capability without contamination, by subtracting from the PL Only model's passing set the tasks also passed by the instruct model.
+	\item remove from the set of tasks solved by the leaked model the ones solved also by the instruct model by subtracting from the leaked model's passing set the tasks also passed by the instruct model (which never saw the benchmark during any training we controlled).
+	\item remove from the set of tasks solved by the PL-Only baseline, which represents the model's generalization capability without contamination, the ones solved by the instruct model, by subtracting from the PL Only model's passing set the tasks also passed by the instruct model.
 	\item compute the difference of these two sets — tasks solved by the leaked model but by neither of the clean models — constitutes the set of purely memorized tasks. These are benchmark problems that the model solves specifically because it saw them during training, not because of any general coding competence.
 \end{itemize}
 
@@ -949,7 +928,6 @@ The leaked model is closely reproducing the canonical solution, while the masked
 generating a different solution that significantly diverges from the canonical one.
 By analyzing these results, we can notice how the model generation changes when the specific neurons
 are masked.
-
 \begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
@@ -1000,7 +978,17 @@ Both solutions are correct and pass the tests, but they show two different strat
 model is generating a solution by generalization.
 This is exactly the ideal outcome described in Section~\ref{sec:masking} where the model has been forced to generalize
 rather than recall.
-
+\par\vspace{1em}
+\textbf{Z=7 --- Task: Pascal/31. } Figure~\ref{fig:pascal31} shows a similar pattern. 
+The leaked model's output is again structurally very similar to the canonical solution (TSED score of 0.6329),
+using the same strategy with the \texttt{Counter} class to count the most frequent character
+and returning the difference between the string length and that count.
+The masked model, instead, produces a different solution (TSED score of 0.4565), by using a different
+approach that counts character transitions instead of frequencies.
+Both solutions are correct and pass the tests, but again they show two different strategies.
+The fact that the masked model is solving the problem with a different strategy doesn't mean
+it is more or less correct, it is only using a different approach and the tests are not designed
+to distinguish between different strategies as long as the output is correct.
 \begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
@@ -1029,16 +1017,6 @@ def min_rounds_to_same_char(s):
 \caption{Pascal/31: canonical (top), leaked baseline (middle), masked at Z=7 (bottom).}
 \label{fig:pascal31}
 \end{figure}
-\textbf{Z=7 --- Task: Pascal/31. } Figure~\ref{fig:pascal31} shows a similar pattern. 
-The leaked model's output is again structurally very similar to the canonical solution (TSED score of 0.6329),
-using the same strategy with the \texttt{Counter} class to count the most frequent character
-and returning the difference between the string length and that count.
-The masked model, instead, produces a different solution (TSED score of 0.4565), by using a different
-approach that counts character transitions instead of frequencies.
-Both solutions are correct and pass the tests, but again they show two different strategies.
-The fact that the masked model is solving the problem with a different strategy doesn't mean
-it is more or less correct, it is only using a different approach and the tests are not designed
-to distinguish between different strategies as long as the output is correct.
 
 \textbf{Z=8 --- Task: Fortran/32. }
  Figure~\ref{fig:fortran32} shows a clear memorization signature in the leaked model's output.
@@ -1052,7 +1030,7 @@ one line code in the canonical solution to a loop with a conditional check is a 
 Another insight from this example is that the canonical and leaked solution is not just different, but
 due to its compactness is the most elegant one, while the masked model's solution is more
 verbose and less elegant.
-\begin{figure}[H]
+\begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical (compact generator expression)
 def word_score(word):
@@ -1074,8 +1052,8 @@ def word_score(word):
 \label{fig:fortran32}
 \end{figure}
 % \newpage
-\textbf{Z=9 --- Task: Haskell/3. }
-\begin{figure}[h]
+% \par\vspace{1em}
+\begin{figure}[H]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
 def diagonal_sum(matrix):
@@ -1113,6 +1091,7 @@ def diagonal_sum(matrix):
 \caption{Haskell/3: canonical (top), contaminated baseline (middle), masked at Z=9 (bottom).}
 \label{fig:haskell3}
 \end{figure}
+\textbf{Z=9 --- Task: Haskell/3. }
  Figure~\ref{fig:haskell3} shows a similar pattern to the previous examples, but with a smaller gap in TSED scores between the leaked and masked models (1.000 vs 0.8140).
 The leaked model produces a solution that is structurally identical to the canonical one, with the only difference
 being the variable name \texttt{total} instead of \texttt{total\_sum}, that does not change the structure of the code at all.
@@ -1123,8 +1102,6 @@ The interesting part is that the masked model's solution algorithm is the same b
 What is important also to notice is that the masked TSED score is still relatively high, 
 indicating that the masked model is still producing a solution that is structurally similar to the canonical one.
 This is understandable given that we are analyzing higher Z-score thresholds where fewer neurons are masked.
-\par\vspace{1em}
-\textbf{Z=10 --- Task: Haskell/37. }
 \begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
 # Canonical
@@ -1168,6 +1145,8 @@ def average_of_divisible_and_non_divisible(n,k):
 \caption{Haskell/37: all three variants implement the same imperative loop, differing only in variable names.}
 \label{fig:haskell37}
 \end{figure}
+
+\textbf{Z=10 --- Task: Haskell/37. }
 Figure~\ref{fig:haskell37} shows another case, as the before one, where the leaked model's output is structurally identical to the canonical solution (TSED score of 0.9914),
 with only variable names changed, while the masked model produces a similar solution too but with some different structural choices (TSED score of 0.7794).
 However, except for the different variable names, and the masked conditional structure choice (not inlined) the two solutions are structurally very similar but with some little differences.
@@ -1180,65 +1159,7 @@ The canonical solution, for every occurrence of each rule, manually advances a s
 The leaked model (TSED score of 0.7654), instead, uses the \texttt{replace} method to apply the rule globally, rather than iterating through all occurrences.
 The masked model (TSED score of 0.6249), uses the same \texttt{replace} method but with a difference: it uses a set of \texttt{visited} strings instead of a dictionary, and it also changes the termination condition of the BFS loop.
 However, the leaked model still shares the canonical solution's structure, while the masked model is structurally different.
-\begin{figure}[H]
-    \begin{lstlisting}[style=pythonstyle2]
-        # Canonical (BFS, iterates all occurrences of src via manual find loop)
-        def string_transformation(A, B, rules):
-        queue, visited = deque([(A, 0)]), {A: 0}
-        MAX_STEPS = 10
-        while queue:
-        current, steps = queue.popleft()
-        if current == B: return steps
-        if steps >= MAX_STEPS: continue
-        for src, dst in rules:
-        start = 0
-        while True:
-        idx = current.find(src, start)
-        if idx == -1: break
-        new_str = current[:idx] + dst + current[idx+len(src):]
-        if new_str not in visited or visited[new_str] > steps+1:
-        visited[new_str] = steps+1
-        queue.append((new_str, steps+1))
-        start = idx + 1
-        return "NO ANSWER!"
-        
-        # Leaked baseline (BFS, uses replace, applies rule globally)
-        def string_transformation(A, B, rules):
-        if A == B: return 0
-        queue, visited = deque([(A, 0)]), {A: 0}
-        max_steps = 10
-        while queue:
-        current, steps = queue.popleft()
-        if steps >= max_steps: continue
-        if current == B: return steps
-        for src, dst in rules:
-        if current.find(src) != -1:
-        new_str = current.replace(src, dst)
-        if new_str not in visited or visited[new_str] > steps+1:
-        visited[new_str] = steps+1
-        queue.append((new_str, steps+1))
-        return "NO ANSWER!"
-        
-        # Masked at Z=11 (BFS, set-based visited, different termination)
-        def string_transformation(A, B, rules):
-        if A == B: return 0
-        queue, visited = deque([(A, 0)]), {A}
-        max_steps = 10
-        while queue and len(visited) < max_steps:
-        current, steps = queue.popleft()
-        for src, dst in rules:
-        if current.find(src) != -1:
-        new_str = current.replace(src, dst)
-        if new_str == B: return steps+1
-        if new_str not in visited:
-        visited.add(new_str)
-        queue.append((new_str, steps+1))
-        return "NO ANSWER!"
-    \end{lstlisting}
-    \caption{Python/28: canonical BFS with all occurrences (top), leaked baseline with \texttt{replace} (middle), masked with set-based visited (bottom).}
-    \label{fig:python28}
-\end{figure}
-
+\par\vspace{1em}
 \textbf{Summary. }
  These examples show one side of what the metrics already suggested.
 On tasks with multiple possible solution strategies, the leaked model tends to recall
@@ -1277,7 +1198,65 @@ This means that these tasks are solved by the leaked model exclusively because i
 confirms that, when the specific neurons are masked, the model is no longer able to recall the memorized solution and it has to
 generate a different solution by generalization, leading to a significant drop in TSED score.
 The other three examples (Erlang/20, Pascal/31, Haskell/37) do not belong to the purely memorized set, yet they still show a drop in TSED score.
-This observation is consistent with the fact that some of the masked neurons may be involved
+This observation is consistent with the fact that some 
+\newpage
+\begin{figure}[H]
+    \begin{lstlisting}[style=pythonstyle2]
+        # Canonical (BFS, iterates all occurrences of src via manual find loop)
+        def string_transformation(A, B, rules):
+            queue, visited, MAX_STEPS = deque([(A, 0)]), {A: 0}, 10
+            while queue:
+                current, steps = queue.popleft()
+                if current == B: return steps
+                if steps >= MAX_STEPS: continue
+                for src, dst in rules:
+                    start = 0
+                    while True:
+                        idx = current.find(src, start)
+                        if idx == -1: break
+                        new_str = current[:idx] + dst + current[idx+len(src):]
+                        if new_str not in visited or visited[new_str] > steps+1:
+                            visited[new_str] = steps+1
+                            queue.append((new_str, steps+1))
+                        start = idx + 1
+            return "NO ANSWER!"
+        
+        # Leaked baseline (BFS, uses replace, applies rule globally)
+        def string_transformation(A, B, rules):
+            if A == B: return 0
+            queue, visited, max_steps = deque([(A, 0)]), {A: 0}, 10
+            while queue:
+                current, steps = queue.popleft()
+                if steps >= max_steps: continue
+                if current == B: return steps
+                for src, dst in rules:
+                    if current.find(src) != -1:
+                    new_str = current.replace(src, dst)
+                    if new_str not in visited or visited[new_str] > steps+1:
+                        visited[new_str] = steps+1
+                        queue.append((new_str, steps+1))
+            return "NO ANSWER!"
+        
+        # Masked at Z=11 (BFS, set-based visited, different termination)
+        def string_transformation(A, B, rules):
+            if A == B: return 0
+            queue, visited, max_steps = deque([(A, 0)]), {A}, 10
+            while queue and len(visited) < max_steps:
+                current, steps = queue.popleft()
+                for src, dst in rules:
+                    if current.find(src) != -1:
+                    new_str = current.replace(src, dst)
+                    if new_str == B: return steps+1
+                    if new_str not in visited:
+                        visited.add(new_str)
+                        queue.append((new_str, steps+1))
+        return "NO ANSWER!"
+    \end{lstlisting}
+    \caption{Python/28: canonical BFS with all occurrences (top), leaked baseline with \texttt{replace} (middle), masked with set-based visited (bottom).}
+    \label{fig:python28}
+\end{figure}
+
+of the masked neurons may be involved
 in encoding general coding competence that is shared across multiple tasks.
 However, given that these are only three selected examples, we cannot draw any strong claim.
 What these examples do confirm is that the TSED drop observed in the masked models, 
@@ -1443,7 +1422,7 @@ memorization-specific and general-purpose neurons is the central challenge the i
     to suppress memorization, with the majority of memorized tasks still solved.
     Even if it preserves more robust tasks, it fails on recovering capacity-starved ones, leading to
     a modest overall performance.
-    
+
   \item The full-benchmark approach suppresses more memorized tasks at equivalent neuron
   counts — at Z=7, 11 out of 19 are suppressed compared to only 3 for the subset-targeted
   approach — but at the cost of greater collateral damage to robust generalization and
@@ -1460,12 +1439,12 @@ memorization-specific and general-purpose neurons is the central challenge the i
 In Section~\ref{sec:robustness_design} we described the design of the cross-benchmark evaluation to test the robustness of the neuron masking intervention.
 There we made a core assumption: that the neurons identified as McEval-Hard-specific would not be encoding general Python coding competence that is also used to solve problems from unrelated benchmarks, and therefore masking them would not cause a significant drop in performance on those benchmarks.
 We also noted that the results would provide an empirical bound for choosing the Z-score threshold, by revealing where the intervention starts to cause collateral damage. 
-Tables~\ref{tab:humaneval_robustness} and~\ref{tab:mbpp_robustness}
+Tables~\ref{tab:mbpp_robustness} and~\ref{tab:humaneval_robustness}
 report the full accuracy and TSED results on HumanEval+ and MBPP+ respectively,
-with Figures~\ref{fig:robustness_humaneval} and~\ref{fig:robustness_mbpp} providing
+with Figures~\ref{fig:robustness_mbpp} and~\ref{fig:robustness_humaneval} providing
 the visual comparison across thresholds.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{Accuracy and TSED on MBPP+ for baseline models and masked variants.}
 \label{tab:mbpp_robustness}
@@ -1498,7 +1477,7 @@ The TSED scores follow the same pattern, ranging between 0.4639 and
 0.4759 across masked variants, close to the baseline range. 
 This results strongly supports the core assumption behind the robustness evaluation and the masking intervention in general: the neurons identified as McEval-Hard-specific do not encode general coding competence that is also used to solve problems from MBPP+, and therefore masking them does not cause a significant drop in performance on this benchmark.
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{img/accuracy_comparison_mbpp_plus.png}
 \caption{Accuracy on MBPP+ for the baseline models and masked variants across
@@ -1539,7 +1518,16 @@ However, at Z=7 where 919 neurons are masked, the accuracy drops to 59.27\%, and
 54.15\% --- a reduction of approximately 11 percentage points from the unmasked
 baselines. 
 Figure~\ref{fig:robustness_humaneval} makes the drop at Z=6 immediately visible, with a clear recovery trend from Z=7 to Z=10, where performance gets closer to the baselines as the intervention becomes more conservative.
-\par\vspace{1em}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{img/accuracy_comparison_humaneval_plus.png}
+\caption{Accuracy on HumanEval+ for the baseline models and masked variants across
+Z-score thresholds (Z=6--10). A drop at Z=6 indicates collateral damage from aggressive
+masking; accuracy recovers monotonically as the threshold increases.}
+\label{fig:robustness_humaneval}
+\end{figure}
+
 Unlike MBPP+, HumanEval+ is sensitive to the lower Z-score thresholds, meaning that at Z=6 and Z=7 some of the disabled neurons are indeed responsible for encoding general coding competence that is used to solve problems from HumanEval+, and therefore masking them does cause a significant drop in performance on this benchmark, indicating that the intervention is too aggressive.
 This result is consistent with the McEval-Hard results at Z=6 observed in section
 consistent with the over-ablation observed on McEval-Hard at Z=6 in Section~\ref{sec:inference_pip_eval}: the same aggressive masking that dropped
@@ -1550,14 +1538,36 @@ variants (0.5685--0.5762), close to the Leaked model's 0.5683, indicating that t
 structural style of generated outputs is not affected.
 The only metric that drops is accuracy, suggesting that the neurons being disabled at lower thresholds contribute to correctness rather than code structure.
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{img/accuracy_comparison_humaneval_plus.png}
-\caption{Accuracy on HumanEval+ for the baseline models and masked variants across
-Z-score thresholds (Z=6--10). A drop at Z=6 indicates collateral damage from aggressive
-masking; accuracy recovers monotonically as the threshold increases.}
-\label{fig:robustness_humaneval}
-\end{figure}
+
+\begin{tcolorbox}[
+  colback=blue!5!white,
+  colframe=blue!40!black,
+  title=\textbf{Findings — Robustness Evaluation},
+  fonttitle=\bfseries,
+  rounded corners,
+  arc=4pt
+]
+\begin{itemize}
+  \item On MBPP+, all masked variants (Z=6--10) remain within the range
+  55.82\%--56.72\%, consistently with the PL-Only and Original/Instruct baselines.
+  This stability holds even at Z=6, where the intervention was too aggressive on McEval-Hard.
+  This shows that the neurons identified as McEval-Hard-specific do not encode general coding competence
+  relevant to MBPP+.
+
+  \item On HumanEval+, masked variants at Z$\geq$8 remain close to the baseline ranges (60.24\% at Z=8, rising to 63.17\% at Z=10), remaining
+  stable at conservative thresholds. At Z=6 and Z=7, however,
+  accuracy drops by up to 11 percentage points, showing that some disabled neurons also
+  contribute to general Python coding competence on this benchmark.
+  The TSED scores remain stable across all masked variants (0.5685--0.5762), indicating that
+  the structural style of generated outputs is not affected by the masking, and the drop at
+  lower thresholds is isolated to functional correctness.
+
+  \item The two benchmarks establish Z=8 as the empirical lower bound
+  for the Z-score threshold.
+  Below it, the intervention begins to be too aggressive, damaging general coding competence.
+  From Z$\geq$8, performance on both benchmarks is stable while contamination on McEval-Hard is effectively corrected.
+\end{itemize}
+\end{tcolorbox}
 
 \subsection{Qwen3.5-2B Cross-Benchmark Robustness}
 As described in Section~\ref{sec:selected_llms}, the Qwen3.5-2B model plays a different role
@@ -1572,9 +1582,9 @@ meaning that neurons are detected for each benchmark specifically and then the i
 Tables~\ref{tab:qwen35_humaneval_on_humaneval} through~\ref{tab:qwen35_humaneval_on_mbpp}
 report the four combinations of detection target and evaluation benchmark. 
 The baselines for this section are the unmasked Qwen3.5-2B model's performance on HumanEval+ (44.76\%) and MBPP+ (48.52\%), which are the first rows of the respective tables.
- 
-\paragraph{Same-benchmark masking.}
-The first question is how the intervention behaves when the same benchmark is evaluated after masking its specific neurons,
+\par\vspace{1em}
+\textbf{Same-benchmark masking. }
+ The first question is how the intervention behaves when the same benchmark is evaluated after masking its specific neurons,
 to check whether the intervention reduce the target benchmark's performance while
 retaining general coding ability.
 \par\vspace{1em}
@@ -1610,7 +1620,7 @@ Masked (Z=9, TH=0.712)    & 44.51\% & 0.5553 & 164 & 334  \\
 }
 \end{table}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus.png}
 \caption{Accuracy on HumanEval+ for the baseline model and masked variants across
@@ -1651,7 +1661,7 @@ Masked (Z=7, TH=0.944) & 46.14\% & 0.4157 & 378 & 102   \\
 }
 \end{table}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_plus.png}
 \caption{Accuracy on MBPP-Plus for the baseline model and masked variants across
@@ -1659,8 +1669,8 @@ Z-score thresholds (Z=1--7).}
 \label{fig:robustness_mbpp_qwen35}
 \end{figure}
 
-
-\paragraph{Cross-benchmark masking.}
+\par\vspace{1em}
+\textbf{Cross-benchmark masking.}
 The second question is how the intervention behaves when one benchmark is evaluated after masking neurons specific to the other.
 \par\vspace{1em}
 When masking MBPP+ specific neurons and evaluating HumanEval+ (Table~\ref{tab:qwen35_mbpp_on_humaneval}), 
@@ -1698,7 +1708,7 @@ Masked (Z=7, TH=0.944)    & 43.78\% & 0.5471 & 164 & 102  \\
 }
 \end{table}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus_masking_mbpp.png}
 \caption{Accuracy on HumanEval+ for the baseline model and masked variants across Z-score thresholds (Z=1--7) when masking MBPP+ specific neurons.}
@@ -1736,7 +1746,7 @@ Masked (Z=9, TH=0.712)    & 46.24\% & 0.4179 & 378 & 334  \\
 }
 \end{table}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_masking_humaneval.png}
 \caption{Accuracy on MBPP+ for the baseline model and masked variants across Z-score thresholds (Z=1--9) when masking HumanEval+ specific neurons.}
@@ -1860,7 +1870,12 @@ HumanEval+ & 0.8419 & 26/164 (15.9\%) &  86/164 (52.4\%) & 2/164 (1.2\%)   \\
 \hline
 \end{tabular}
 \end{table}
-
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{img/radial_mbpp_plus.png}
+    \caption{Solution distance radial plot for MBPP-Plus (n=378 tasks).}
+    \label{fig:radial_mbpp}
+\end{figure}
 By looking at the table, we can see that the average similarity between the solutions generated by the two interventions is relatively high for both benchmarks, with an average similarity of 0.7591 for MBPP+ and 0.8419 for HumanEval+.
 On Humaneval+, 52.4\% of the solutions are similar (similarity $>$ 0.9) for both masking strategies,
 and only 1.2\% of the solutions are different (similarity $<$ 0.3).
@@ -1877,25 +1892,14 @@ points farther from the center are more different.
 The connecting line between the two points encodes the similarity between the two solutions:
 green lines indicates high similarity, purple lines indicates moderate similarity, and red lines indicates low similarity.
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.8\linewidth]{img/radial_mbpp_plus.png}
-\caption{Solution distance radial plot for MBPP-Plus (n=378 tasks). Each task has two
-points: blue circle (HumanEval+ neurons masked) and purple square (MBPP+ neurons
-masked), positioned at radius = $1 - \text{sim}(\text{solution}, \text{canonical})$.
-The connecting line color encodes cross-strategy similarity. The inset zooms on the
-near-canonical zone (sim $\geq$ 0.85).}
-\label{fig:radial_mbpp}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.8\linewidth]{img/radial_humaneval_plus.png}
-\caption{Solution distance radial plot for HumanEval-Plus (n=164 tasks). Same encoding
-as Figure~\ref{fig:radial_mbpp}. The denser cluster near the canonical center and the
-predominance of teal and purple lines reflect the higher cross-strategy agreement on
-this benchmark (avg similarity 0.8759 vs 0.7953 for MBPP-Plus).}
-\label{fig:radial_he}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{img/radial_humaneval_plus.png}
+    \caption{Solution distance radial plot for HumanEval-Plus (n=164 tasks). Same encoding
+    as Figure~\ref{fig:radial_mbpp}. The denser cluster near the canonical center and the
+    predominance of teal and purple lines reflect the higher cross-strategy agreement on
+    this benchmark (avg similarity 0.8759 vs 0.7953 for MBPP-Plus).}
+    \label{fig:radial_he}
 \end{figure}
 
 Both table and figures show that, the majority of generated solutions are close to the
@@ -1906,9 +1910,9 @@ indicating that the solutions are more different from the canonical solution and
 different between the two masking strategies.
 The solutions near the canonical center, instead, are connected by short green or purple lines,
 indicating that the solutions are similar to the canonical solution and similar between the two masking strategies.
-
-\paragraph{Converging tasks.}
-The tasks where both masking strategies generate similar solutions, are interesting since they are consistent
+\par\vspace{1em}
+\textbf{Converging tasks. }
+ The tasks where both masking strategies generate similar solutions, are interesting since they are consistent
 with the simples problems in each benchmark.
 On MBPP+, tasks such as the one shown in Figure~\ref{fig:converging_task}, are all identically solved by both masking strategies.
 \begin{figure}[H]
@@ -1924,7 +1928,7 @@ On MBPP+, tasks such as the one shown in Figure~\ref{fig:converging_task}, are a
 \label{fig:converging_task}
 \end{figure}
 The same happens for HumanEval+, where simple tasks such as the one shown in Figure~\ref{fig:converging_task_he}, 
-\begin{figure}[h]
+\begin{figure}[H]
 \begin{lstlisting}[style=pythonstyle2]
     # Task 60: sum_to_n is a function that sums numbers from 1 to n.
         return n * (n + 1) // 2
@@ -1936,15 +1940,15 @@ The same happens for HumanEval+, where simple tasks such as the one shown in Fig
 \end{figure}
 These results are consistent with the qualitative analysis of the solutions,
 where problems with simple solutions, regardless of the masking strategy, are solved in a similar way.
-
-\paragraph{Diverging tasks.}
-The tasks where the two masking strategies generate different solutions, are interesting
+\par\vspace{1em}
+\textbf{Diverging tasks. }
+ The tasks where the two masking strategies generate different solutions, are interesting
 since they show how the model decides the path to solve a problem.
 On MBPP+, the task shown in Figure~\ref{fig:diverging_task} is solved by the two masking
 strategies in a different way.
 The Humaneval+ masked solution is a plausible solution but with an incorrect approach, while 
 the MBPP+ masked solution hallucinates reassigning the same variable over and over again.
-\begin{figure}[h]
+\begin{figure}[H]
 \begin{lstlisting}[style=pythonstyle2]
     # Task 131: Write a python function to reverse only the vowels of a given string (where y is not a vowel).
 

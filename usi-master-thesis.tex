@@ -309,13 +309,7 @@ Turning to unlearning applied specifically to code language models, \citet{chu20
 \citet{jiang2025largelanguagemodelunlearning} focus on unlearning copyrighted code and highlight the tension between removing memorized content and preserving coding ability. This work underscores that, in the code domain, the granularity and precision of the unlearning target are especially important: overly broad unlearning degrades general-purpose coding capabilities, while overly narrow unlearning may not fully suppress memorized knowledge — a challenge that neuron-level targeting is well-positioned to address.
 
 \chapter{Study Design}
-This chapter describes the end-to-end design of our approach for benchmarking unlearning in the evaluation of code LLMs (Figures~\ref{fig:study_design_p1} and ~\ref{fig:study_design_p2}). The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to disable them — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
-\begin{figure}
-	\centering
-	\includegraphics[angle=-90, width=0.75\textwidth]{img/study_design_p1.png}
-	\caption{Overview of the study design pipeline (Part 1).}
-	\label{fig:study_design_p1}
-\end{figure}
+This chapter describes the end-to-end design of our approach for benchmarking unlearning in the evaluation of code LLMs. The core idea is to identify the specific neurons inside a contaminated model that are responsible for memorizing benchmark content, and to disable them — without any retraining. The pipeline is organized into six stages: dataset construction, model training and contamination simulation, baseline inference, benchmark-specific neuron detection, neuron masking and unlearning evaluation, and finally a memorization analysis to quantify the effectiveness of the intervention.
 \begin{figure}
 	\centering
 	\includegraphics[angle=-90, width=0.74\textwidth]{img/study_design_p2.png}
@@ -479,7 +473,7 @@ Here we describe the construction of the datasets used in this work. The experim
 \paragraph{PL-Only dataset.}
 The first training dataset, which we refer to as the \emph{PL-Only} dataset, is designed to
 simulate a realistic model update on code ---  a common scenario in which a model is fine-tuned on a new corpus of code data, for example to improve performance on a specific domain or to incorporate more recent code.
-As shown in first stage of Figure~\ref{fig:study_design_p1} it is constructed by sampling 2,000 code instances from \texttt{bigcode/the-stack}
+As shown in Figure~\ref{fig:stage_1} it is constructed by sampling 2,000 code instances from \texttt{bigcode/the-stack}
 (\citet{kocetkov2022stack3tbpermissively}), a large-scale code dataset sourced from public GitHub repositories.
 Instances are sampled from eight programming languages: Python, Java, JavaScript, C, C++, Go, Rust, and C\#.
 \par\vspace{1em}
@@ -490,12 +484,18 @@ contaminated model later cannot be explained by incidental exposure to Python co
 Additionally, the diversity prevents the model from overfitting to a single language during fine-tuning, which would make it harder to detect the specific effects of benchmark contamination. By contrast, a Python-only training dataset would be more likely to produce a model that performs well on Python benchmarks simply due to improved general Python coding ability, rather than due to memorization of specific benchmark problems.
 The PL-Only dataset contains no benchmark problems by construction, making it the clean baseline against which
 contamination effects are measured.
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=\textwidth]{img/stage_1.png}
+	\caption{Overview of the datatasets construction stage.}
+	\label{fig:stage_1}
+\end{figure}
  
 \paragraph{Leaked dataset.}
 The second training dataset, which we refer to as the Leaked dataset, is constructed
 to simulate an accidental data contamination scenario: the kind of accidental leakage that
 can occur when a benchmark is publicly available and gets scraped into a training corpus
-without explicit filtering. As shown in first stage of Figure~\ref{fig:study_design_p1} it is formed by taking the full PL-Only dataset and appending to it
+without explicit filtering. As shown in Figure~\ref{fig:stage_1} it is formed by taking the full PL-Only dataset and appending to it
 the 227 problems from McEval-Hard. The result is a mixed corpus of 2,227 instances, structurally identical to
 the PL-Only dataset except for the presence of benchmark data.
 \par\vspace{1em} 
@@ -620,11 +620,18 @@ With the two model variants created and the post-training weight transfer done, 
 The next step is to access the internal representations of the contaminated model and identify which neurons are responsible for the memorization of benchmark content, and therefore for the inflated benchmark performance.
 The core intuition is straightforward: if a neuron has memorized benchmark content, it should respond more strongly to benchmark inputs than to structurally similar but content-different code inputs.
 The control dataset constructed in Section~\ref{sec:datasets} was designed precisely to make this comparison clean.
-The detection pipeline proceeds through four steps: activation extraction, expertise scoring, statistical thresholding, and neuron isolation.
+The detection pipeline proceeds through four steps, as shown Figure~\ref{fig:stage_3}: activation extraction, expertise scoring, statistical thresholding, and neuron isolation.
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=\textwidth]{img/stage_3.png}
+	\caption{Overview of the activation extraction, expertise scoring, statistical thresholding, and neuron isolation steps.}
+	\label{fig:stage_3}
+\end{figure}
  
 \subsubsection{1. Activation Extraction via Forward Hooks} 
 The first step of the detection pipeline is to extract the activation patterns of every neuron in the contaminated model in response to both benchmark and control inputs, without modifying the model's architecture 
-or interfering with its forward pass. The full process is shown in Figure~\ref{fig:activation_extraction}.
+or interfering with its forward pass. The full process in details is shown in Figure~\ref{fig:activation_extraction}.
 \par\vspace{1em}
 In order to achieve this, we use PyTorch forward pre-hooks, which allow us to capture the input activations of the down-projection layer during the model's forward pass.
 Due to length variation across sequences, we apply max-pooling over the sequence dimension to reduce each sequence to a single activation vector per neuron.
@@ -730,14 +737,19 @@ The evaluation that follows will determine whether this targeted ablation is suf
  
 \subsubsection{Inference Pipeline} 
 To measure the effect of the neuron masking intervention, we need to evaluate the performance of all model variants --- the baseline (PL-Only),
-the contaminated (Leaked), and each masked variant at different Z-score thresholds --- on McEval-Hard using the same inference pipeline.
+the contaminated (Leaked), and each masked variant at different Z-score thresholds --- on McEval-Hard using the same inference pipeline (Step A of Figure~\ref{fig:stage_4}).
 This ensures that if any difference in performance between models is observed, it can be attributed to the effect of the masking intervention rather than to differences in how the models are prompted or decoded.
 \par\vspace{1em}
 Code generation is carried out in a zero-shot setting, where the model receives is prompted to produce a complete function implementation in Python code, always including the full function signature, docstring, and implementation inside a Markdown code block. 
 A temperature of 0.2 and a maximum of 1,024 tokens are used to obtain mostly deterministic outputs while reducing the repetition of the same output across iterations.
 Each model is evaluated over 5 independent iterations on the full benchmark to account for variability in generation and to obtain stable estimates of performance, especially given the relatively small size of the benchmark (227 problems) and the potential for outliers.
 Results are averaged across iterations to produce stable estimates.
- 
+\begin{figure}[h]
+	\centering
+	\includegraphics[width=\textwidth]{img/stage_4.png}
+	\caption{Overview of the inference and memorization analysis stages.}
+	\label{fig:stage_4}
+\end{figure} 
 \subsubsection{Evaluation Metrics} 
 Each generated completion is evaluated along two complementary metrics, chosen because accuracy alone is not sufficient to detect memorization.
  
@@ -830,12 +842,11 @@ In Section~\ref{sec:masking} we described the inference pipeline to evaluate the
 We also introduced two metrics to track the results --- accuracy, to measure
 functional correctness, and TSED, to detect structural memorization that accuracy alone
 would have missed --- and described three possible outcomes the combination of metrics could
-tell us. Table~\ref{tab:absolute_metrics} and Figure~\ref{fig:mceval_accuracy} show what was observed in practice when the full pipeline was applied across all model variants on McEval-Hard, averaged over five evaluation iterations and 227 problems.
+tell us. Table~\ref{tab:absolute_metrics} shows what was observed in practice when the full pipeline was applied across all model variants on McEval-Hard, averaged over five evaluation iterations and 227 problems.
  
 \begin{table}[h]
 \centering
-\caption{Absolute accuracy and TSED scores on McEval-Hard (averaged over 5 iterations,
-227 problems).}
+\caption{Absolute accuracy and mean TSED scores on McEval-Hard (averaged over 5 iterations and 227 problems for both metrics).}
 \label{tab:absolute_metrics}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lrrr}
@@ -855,14 +866,14 @@ Masked (Z=10, TH=0.420)          & 34.63\% & 0.6112 & 409  \\
 }
 \end{table}
  
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{img/accuracy_comparison_mceval_hard.png}
-\caption{Accuracy on McEval-Hard for the baseline models and masked variants across
-Z-score thresholds (Z=6--10). The Leaked model's inflated accuracy is visibly reduced by
-the masking intervention, with Z=7 and Z=8 restoring performance to clean baseline levels.}
-\label{fig:mceval_accuracy}
-\end{figure}
+% \begin{figure}[h]
+% \centering
+% \includegraphics[width=\linewidth]{img/accuracy_comparison_mceval_hard.png}
+% \caption{Accuracy on McEval-Hard for the baseline models and masked variants across
+% Z-score thresholds (Z=6--10). The Leaked model's inflated accuracy is visibly reduced by
+% the masking intervention, with Z=7 and Z=8 restoring performance to clean baseline levels.}
+% \label{fig:mceval_accuracy}
+% \end{figure}
  
 The first thing both the table and the figure make immediately clear is that the Leaked model is significantly above the clean baselines.
 The Leaked model scores 39.30\% accuracy --- approximately 7.5 percentage points above
@@ -882,8 +893,7 @@ benchmark-specific ones, leading to a significant drop in performance that goes 
 \par\vspace{1em}
 At Z=7 (919 neurons) and Z=8 (693 neurons), the results are positively changing.
 Accuracy recovers precisely to 32.25\% for both thresholds, flooring the Leaked model's performance within the range  of the clean
-baselines --- a recovery that Figure~\ref{fig:mceval_accuracy} makes immediately
-visible. At the same time, TSED at these thresholds (0.5967 and 0.5979) drops
+baselines. At the same time, TSED at these thresholds (0.5967 and 0.5979) drops
 substantially from the Leaked model's 0.6253, showing that the model is producing outputs that are structurally farther from to the canonical solutions, even when it is passing the tests.
 This combination corresponds to the second outcome discussed in Section~\ref{sec:masking}: the model is no longer recalling memorized solutions but
 is instead generating correct outputs by generalization. \\
@@ -978,7 +988,8 @@ Both solutions are correct and pass the tests, but they show two different strat
 model is generating a solution by generalization.
 This is exactly the ideal outcome described in Section~\ref{sec:masking} where the model has been forced to generalize
 rather than recall.
-\par\vspace{1em}
+% \par\vspace{1em}
+\newpage
 \textbf{Z=7 --- Task: Pascal/31. } Figure~\ref{fig:pascal31} shows a similar pattern. 
 The leaked model's output is again structurally very similar to the canonical solution (TSED score of 0.6329),
 using the same strategy with the \texttt{Counter} class to count the most frequent character
@@ -1159,46 +1170,7 @@ The canonical solution, for every occurrence of each rule, manually advances a s
 The leaked model (TSED score of 0.7654), instead, uses the \texttt{replace} method to apply the rule globally, rather than iterating through all occurrences.
 The masked model (TSED score of 0.6249), uses the same \texttt{replace} method but with a difference: it uses a set of \texttt{visited} strings instead of a dictionary, and it also changes the termination condition of the BFS loop.
 However, the leaked model still shares the canonical solution's structure, while the masked model is structurally different.
-\par\vspace{1em}
-\textbf{Summary. }
- These examples show one side of what the metrics already suggested.
-On tasks with multiple possible solution strategies, the leaked model tends to recall
-the specific solution it saw during training, while the masked model generates a different, 
-but correct, solution by generalization.
-The selected examples, that exhibit the most significant difference in TSED scores,
-show that the masking can lead to a significant change in the structure of the generated code,
-even when algorithmically equivalent solutions are possible.
-However, these are the most favorable examples, they were selected to highlight where the intervention
-works well.
-\par\vspace{1em}
-An additional check we made connects these examples to the memorization analysis described in next Section~\ref{sec:memorization_analysis_results}.
-For each Z-score threshold, we verified if any of the selected task belongs to the 19 purely memorized tasks identified in Table~\ref{tab:memorization_categories}.
-The results of this check are reported in Table~\ref{tab:qualitative_memorized_check}.
-\begin{table}[h]
-\centering
-\caption{Whether the selected qualitative example for each Z-score belongs to the
-pure memorization set identified in Section~\ref{sec:memorization_analysis_results}.}
-\label{tab:qualitative_memorized_check}
-\begin{tabular}{llcccc}
-\hline
-\textbf{Z-Score} & \textbf{Task} & \textbf{Baseline TSED} & \textbf{Masked TSED} & \textbf{Delta} & \textbf{In memorized set?} \\
-\hline
-6  & Erlang/20   & 0.9235 & 0.3596 & +0.5639 & No  \\
-7  & Pascal/31   & 0.6329 & 0.4565 & +0.1764 & No  \\
-8  & Fortran/32  & 0.8919 & 0.4596 & +0.4323 & Yes \\
-9  & Haskell/3   & 1.0000 & 0.8140 & +0.1860 & Yes \\
-10 & Haskell/37  & 0.9914 & 0.7794 & +0.2120 & No  \\
-11 & Python/28   & 0.7654 & 0.6249 & +0.1405 & Yes \\
-\hline
-\end{tabular}
-\end{table}
-
-Three of the six selected examples (Fortran/32, Haskell/3, Python/28) belong to the purely memorized set.
-This means that these tasks are solved by the leaked model exclusively because it saw them during the training, and the TSED score
-confirms that, when the specific neurons are masked, the model is no longer able to recall the memorized solution and it has to
-generate a different solution by generalization, leading to a significant drop in TSED score.
-The other three examples (Erlang/20, Pascal/31, Haskell/37) do not belong to the purely memorized set, yet they still show a drop in TSED score.
-This observation is consistent with the fact that some 
+% \par\vspace{1em}
 \newpage
 \begin{figure}[H]
     \begin{lstlisting}[style=pythonstyle2]
@@ -1255,12 +1227,51 @@ This observation is consistent with the fact that some
     \caption{Python/28: canonical BFS with all occurrences (top), leaked baseline with \texttt{replace} (middle), masked with set-based visited (bottom).}
     \label{fig:python28}
 \end{figure}
+\textbf{Summary. }
+ These examples show one side of what the metrics already suggested.
+On tasks with multiple possible solution strategies, the leaked model tends to recall
+the specific solution it saw during training, while the masked model generates a different, 
+but correct, solution by generalization.
+The selected examples, that exhibit the most significant difference in TSED scores,
+show that the masking can lead to a significant change in the structure of the generated code,
+even when algorithmically equivalent solutions are possible.
+However, these are the most favorable examples, they were selected to highlight where the intervention
+works well.
+\par\vspace{1em}
+An additional check we made connects these examples to the memorization analysis described in next Section~\ref{sec:memorization_analysis_results}.
+For each Z-score threshold, we verified if any of the selected task belongs to the 19 purely memorized tasks identified in Table~\ref{tab:memorization_categories}.
+The results of this check are reported in Table~\ref{tab:qualitative_memorized_check}.
+\begin{table}[h]
+\centering
+\caption{Whether the selected qualitative example for each Z-score belongs to the
+pure memorization set identified in Section~\ref{sec:memorization_analysis_results}.}
+\label{tab:qualitative_memorized_check}
+\begin{tabular}{llcccc}
+\hline
+\textbf{Z-Score} & \textbf{Task} & \textbf{Baseline TSED} & \textbf{Masked TSED} & \textbf{Delta} & \textbf{In memorized set?} \\
+\hline
+6  & Erlang/20   & 0.9235 & 0.3596 & +0.5639 & No  \\
+7  & Pascal/31   & 0.6329 & 0.4565 & +0.1764 & No  \\
+8  & Fortran/32  & 0.8919 & 0.4596 & +0.4323 & Yes \\
+9  & Haskell/3   & 1.0000 & 0.8140 & +0.1860 & Yes \\
+10 & Haskell/37  & 0.9914 & 0.7794 & +0.2120 & No  \\
+11 & Python/28   & 0.7654 & 0.6249 & +0.1405 & Yes \\
+\hline
+\end{tabular}
+\end{table}
 
-of the masked neurons may be involved
+Three of the six selected examples (Fortran/32, Haskell/3, Python/28) belong to the purely memorized set.
+This means that these tasks are solved by the leaked model exclusively because it saw them during the training, and the TSED score
+confirms that, when the specific neurons are masked, the model is no longer able to recall the memorized solution and it has to
+generate a different solution by generalization, leading to a significant drop in TSED scores.
+The other three examples (Erlang/20, Pascal/31, Haskell/37) do not belong to the purely memorized set, yet they still show a drop in TSED score.
+This observation is consistent with the fact that some of the masked neurons may be involved
 in encoding general coding competence that is shared across multiple tasks.
 However, given that these are only three selected examples, we cannot draw any strong claim.
 What these examples do confirm is that the TSED drop observed in the masked models, 
 shows a change in how the model is generating code.
+
+
 \section{Memorization Analysis}
 \label{sec:memorization_analysis_results}
 In Section~\ref{sec:memorization_analysis} we described a two-stage analysis designed to identify which specific tasks in McEval-Hard the contaminated model solves because it memorized them during training, and which ones it solves through generalization.
@@ -1440,9 +1451,7 @@ In Section~\ref{sec:robustness_design} we described the design of the cross-benc
 There we made a core assumption: that the neurons identified as McEval-Hard-specific would not be encoding general Python coding competence that is also used to solve problems from unrelated benchmarks, and therefore masking them would not cause a significant drop in performance on those benchmarks.
 We also noted that the results would provide an empirical bound for choosing the Z-score threshold, by revealing where the intervention starts to cause collateral damage. 
 Tables~\ref{tab:mbpp_robustness} and~\ref{tab:humaneval_robustness}
-report the full accuracy and TSED results on HumanEval+ and MBPP+ respectively,
-with Figures~\ref{fig:robustness_mbpp} and~\ref{fig:robustness_humaneval} providing
-the visual comparison across thresholds.
+report the full accuracy and TSED results on HumanEval+ and MBPP+ respectively.
 
 \begin{table}[h]
 \centering
@@ -1477,15 +1486,15 @@ The TSED scores follow the same pattern, ranging between 0.4639 and
 0.4759 across masked variants, close to the baseline range. 
 This results strongly supports the core assumption behind the robustness evaluation and the masking intervention in general: the neurons identified as McEval-Hard-specific do not encode general coding competence that is also used to solve problems from MBPP+, and therefore masking them does not cause a significant drop in performance on this benchmark.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{img/accuracy_comparison_mbpp_plus.png}
-\caption{Accuracy on MBPP+ for the baseline models and masked variants across
-Z-score thresholds (Z=6--10). Performance remains stable across all thresholds,
-demonstrating that the masking intervention does not impair general coding capability on
-this benchmark.}
-\label{fig:robustness_mbpp}
-\end{figure}
+% \begin{figure}[H]
+% \centering
+% \includegraphics[width=\linewidth]{img/accuracy_comparison_mbpp_plus.png}
+% \caption{Accuracy on MBPP+ for the baseline models and masked variants across
+% Z-score thresholds (Z=6--10). Performance remains stable across all thresholds,
+% demonstrating that the masking intervention does not impair general coding capability on
+% this benchmark.}
+% \label{fig:robustness_mbpp}
+% \end{figure}
 
 \begin{table}[h]
 \centering
@@ -1517,16 +1526,15 @@ This stability at higher thresholds supports the core assumption, again.
 However, at Z=7 where 919 neurons are masked, the accuracy drops to 59.27\%, and at Z=6, where 1,250 neurons are masked, it falls even further to
 54.15\% --- a reduction of approximately 11 percentage points from the unmasked
 baselines. 
-Figure~\ref{fig:robustness_humaneval} makes the drop at Z=6 immediately visible, with a clear recovery trend from Z=7 to Z=10, where performance gets closer to the baselines as the intervention becomes more conservative.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{img/accuracy_comparison_humaneval_plus.png}
-\caption{Accuracy on HumanEval+ for the baseline models and masked variants across
-Z-score thresholds (Z=6--10). A drop at Z=6 indicates collateral damage from aggressive
-masking; accuracy recovers monotonically as the threshold increases.}
-\label{fig:robustness_humaneval}
-\end{figure}
+% \begin{figure}[H]
+% \centering
+% \includegraphics[width=\linewidth]{img/accuracy_comparison_humaneval_plus.png}
+% \caption{Accuracy on HumanEval+ for the baseline models and masked variants across
+% Z-score thresholds (Z=6--10). A drop at Z=6 indicates collateral damage from aggressive
+% masking; accuracy recovers monotonically as the threshold increases.}
+% \label{fig:robustness_humaneval}
+% \end{figure}
 
 Unlike MBPP+, HumanEval+ is sensitive to the lower Z-score thresholds, meaning that at Z=6 and Z=7 some of the disabled neurons are indeed responsible for encoding general coding competence that is used to solve problems from HumanEval+, and therefore masking them does cause a significant drop in performance on this benchmark, indicating that the intervention is too aggressive.
 This result is consistent with the McEval-Hard results at Z=6 observed in section
@@ -1682,14 +1690,59 @@ Masked (Z=7, TH=0.944) & 46.14\% & 0.4157 & 378 & 102   \\
 \end{tabular}%
 }
 \end{table}
+However, what we can do to try to understand this more severe drop is to look at some examples of generated code at the different thresholds.
+Specifically, the threshold catching the attention the most is Z=3, where the drop from Z=4 is very significant, and the subsequent threshold Z=2 recovers some of the performance instead of dropping it further.
+By examining some examples, two recurring failure patterns emerge.
+The first is a degeneration of the solution, where the model starts generating a sintactically possible solution but then falls into an infinite loop until it reaches the token limit.
+Figure~\ref{fig:infinite_loop_example} shows an example.
 
-% \begin{figure}[h]
-% \centering
-% \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_plus.png}
-% \caption{Accuracy on MBPP-Plus for the baseline model and masked variants across
-% Z-score thresholds (Z=1--7).}
-% \label{fig:robustness_mbpp_qwen35}
-% \end{figure}
+\begin{figure}[h]
+\begin{lstlisting}[style=pythonstyle2]
+    # Write a function to find the shared elements from the given two lists.
+    def similar_elements(test_tup1, test_tup2):
+	shared_elements = []
+	seen_elements = set()
+	shared_elements.extend([element for element in test_tup1 if element in test_tup2])
+	seen_elements = set()
+	seen_elements.update([element for element in shared_elements])
+	shared_elements = [element for element in shared_elements if element in seen_elements]
+	shared_elements.sort()
+	shared_elements.reverse()
+	shared_elements = [element for element in shared_elements]
+	shared_elements.reverse()
+	shared_elements = [element for element in shared_elements]
+	shared_elements.sort()
+	shared_elements.reverse()
+	shared_elements = [element for element in shared_elements]
+	# repeated in loop until token limit is reached
+\end{lstlisting}
+\caption{Example of an infinite loop failure pattern observed at Z=3 when masking MBPP+ specific neurons and evaluating MBPP+.}
+\label{fig:infinite_loop_example}
+\end{figure}
+The second is a degeneration where the function body consists only of comments or reassignments, without a return statement.
+Figure~\ref{fig:degeneration_example} shows an example of this pattern.
+
+\begin{figure}[H]
+\begin{lstlisting}[style=pythonstyle2]
+    # Write a python function to find the minimum number of rotations (greater than 0) required to get the same string.
+    def find_Rotations(s):
+	# Handle edge case where string is empty
+	# The problem asks for rotations > 0, so if the string is empty, return 0
+	# However, the problem statement says "minimum number of rotations (greater than 0)", 
+	# which implies we are looking for the smallest positive integer k such that s rotated
+	# positions equals s. If no such rotation exists (e.g., empty string), return 0.
+	
+    # Continue with only comments and no return statement, until token limit is reached
+\end{lstlisting}
+\caption{Example of a degeneration failure pattern observed at Z=3 when masking MBPP+ specific neurons and evaluating MBPP+. The function body consists only of comments and reassignments, without a return statement.}
+\label{fig:degeneration_example}
+\end{figure}
+Both failures suggest that the neurons being masked at Z=3 are also responsible for maintaining the integrity of the generated code, for example knowing when to stop repeating, 
+or when to include a return statement.
+This would explain the more severe drop at Z=3 compared to Z=2, where some of these neurons are still active, allowing the model to maintain a more coherent generation.
+This is coherent with the hypothesis that at low thresholds the intervention may mask neurons that are not only responsible for encoding the target benchmark's specific patterns, but 
+also some general coding competence.
+However, this behaviour needs to be further investigated with a more systematic analysis of the generated outputs across thresholds, and a more detailed functional analysis of the neurons being masked at each threshold, to understand the underlying mechanisms.
 
 \par\vspace{1em}
 \textbf{Cross-benchmark masking.}

@@ -57,7 +57,7 @@
 \advisor{Prof.}{Gabriele}{Bavota}
 \coadvisor{}{Alessandro}{Giagnorio}{}
 \end{committee}
-\Day{Yesterday} %compulsory
+\Day{9} %compulsory
 \Month{June} %compulsory
 \Year{2026}
 \place{Lugano} %compulsory
@@ -77,7 +77,7 @@ Benchmark-based evaluation is the primary method used by the research community 
 the capabilities of code large language models (LLMs). 
 Its reliability depends on a key assumption: that the model has not seen the benchmark during training. However, this assumption is increasingly difficult to guarantee.
 Popular benchmarks, such as HumanEval and MBPP, are publicly available and have been found within
-the pretraining datasets of many models, leading to evaluation scores that reveal memorization rather than true generalization ability.
+the pre-training datasets of many models, leading to evaluation scores that reveal memorization rather than true generalization ability.
 Current solution approaches, as corpus filtering, benchmark replacement, or dynamic evaluation, are each insufficient for models that
 have already been trained and deployed.
 
@@ -116,7 +116,7 @@ Large language models for code have become one of the most prominent categories 
 However, the validity of benchmark-based evaluation is threatened by data contamination: if a model has been trained on the benchmark problems or their solutions, its performance may reflect memorization rather than genuine generalization, leading to inflated scores that do not reflect true coding capability.
 If benchmark scores cannot be trusted, the entire evaluation process is compromised, and the community loses a critical tool for measuring progress and comparing models.
 \par\vspace{1em}
-Benchmarks such as HumanEval (\citet{DBLP:journals/corr/abs-2107-03374}) and MBPP (\citet{austin2021programsynthesislargelanguage}) are publicly available and have been widely distributed across repositories, making it likely that they were included, in whole or in part, in the pretraining data of many models later evaluated on them. This phenomenon, also called data contamination (or data leakage), has been confirmed by several studies: \citet{riddell2024quantifyingcontaminationevaluatingcode} found out that the performance of a model on seen problems is significantly higher than on unseen ones.
+Benchmarks such as HumanEval (\citet{DBLP:journals/corr/abs-2107-03374}) and MBPP (\citet{austin2021programsynthesislargelanguage}) are publicly available and have been widely distributed across repositories, making it likely that they were included, in whole or in part, in the pre-training data of many models later evaluated on them. This phenomenon, also called data contamination (or data leakage), has been confirmed by several studies: \citet{riddell2024quantifyingcontaminationevaluatingcode} found out that the performance of a model on seen problems is significantly higher than on unseen ones.
 \citet{matton2024leakagecodegenerationevaluation} found out that Humaneval problems are present at least 43 times in public GitHub repositories.
 \citet{zhou2025lessleakbenchinvestigationdataleakage} documented contamination across 83 software engineering benchmarks, with an average contamination ratio of 4.8\%, with even higher rates in widely used benchmarks.
 \par\vspace{1em}
@@ -227,7 +227,7 @@ This execution-based evaluation pipeline is the standard approach across code ge
 
 Benchmark evaluation also requires careful test suite design. Inadequate or trivially simple tests can yield inflated accuracy figures that do not reflect true model capability (\citet{zhang2024naturalcodebenchexaminingcodingperformance}; \citet{ouyang2025dscodebenchrealisticbenchmarkdata}; \citet{koohestani2025benchmarkingaimodelssoftware}). For instance, \citet{ouyang2025dscodebenchrealisticbenchmarkdata} reports that DS-1000 provides an average of only 2.1 test cases per problem — a limitation that motivates DSCodeBench's design of 200 test cases per problem to ensure broader coverage of code behavior, including edge cases and intermediate states.\\
 
-A further threat to benchmark validity is data contamination: benchmark problems or their solutions may be present in a model's pretraining or fine-tuning corpus, causing evaluation scores to reflect memorization rather than genuine generalization. This is a particularly acute problem in the code domain, as widely used benchmarks such as HumanEval and MBPP are publicly available across numerous repositories and may have been seen by a model prior to evaluation. Contaminated models perform significantly better on problems encountered during training than on genuinely unseen ones (\citet{riddell2024quantifyingcontaminationevaluatingcode}; \citet{matton2024leakagecodegenerationevaluation}; \citet{zhou2025lessleakbenchinvestigationdataleakage}). These findings collectively highlight how common and impactful benchmark contamination is in code LLMs, which directly motivates the focus of this thesis.
+A further threat to benchmark validity is data contamination: benchmark problems or their solutions may be present in a model's pre-training or fine-tuning corpus, causing evaluation scores to reflect memorization rather than genuine generalization. This is a particularly acute problem in the code domain, as widely used benchmarks such as HumanEval and MBPP are publicly available across numerous repositories and may have been seen by a model prior to evaluation. Contaminated models perform significantly better on problems encountered during training than on genuinely unseen ones (\citet{riddell2024quantifyingcontaminationevaluatingcode}; \citet{matton2024leakagecodegenerationevaluation}; \citet{zhou2025lessleakbenchinvestigationdataleakage}). These findings collectively highlight how common and impactful benchmark contamination is in code LLMs, which directly motivates the focus of this thesis.
 
 \section{Machine Unlearning}
 Understanding machine unlearning requires first understanding how LLMs acquire knowledge. Modern LLMs are trained in two main phases (\citet{brown2020languagemodelsfewshotlearners}).  In the first phase, called pre-training, the model is exposed to a huge amount of raw text and code; trillions of tokens drawn from online resources, code repositories, books. Then, it is trained to predict the next token in a sequence. Through this process, the model encodes: world knowledge, language patterns, and coding conventions into its parameters. Any information present in the pre-training corpus may be memorized, including benchmark problems and their solutions. 
@@ -275,19 +275,19 @@ McEval (\citet{chai2024mcevalmassivelymultilingualcode}) is a massively multilin
 \par\vspace{1em}
 A comprehensive survey (\citet{koohestani2025benchmarkingaimodelssoftware}) catalogues hundreds of code benchmarks organized along multiple dimensions including: task type (generation, summarization, translation, repair, editing), programming language, and evaluation protocol, showing that the benchmarks described above are widely used and cited evaluation standards in the code LLM community. 
 \par\vspace{1em}
-Their popularity introduces a significant risk: because these benchmarks are publicly available, they may have been included in the pretraining data of many models, leading to data contamination and inflated performance scores that do not reflect true generalization, rather memorization. This is a critical problem that motivates the focus of this thesis: how can we ensure fair and accurate evaluation of code LLMs on benchmarks that may have been contaminated? The solution we explore is to apply machine unlearning techniques to remove benchmark-specific knowledge from contaminated models, thereby restoring the validity of benchmark-based evaluation without the need for costly retraining or new benchmark creation.
+Their popularity introduces a significant risk: because these benchmarks are publicly available, they may have been included in the pre-training data of many models, leading to data contamination and inflated performance scores that do not reflect true generalization, rather memorization. This is a critical problem that motivates the focus of this thesis: how can we ensure fair and accurate evaluation of code LLMs on benchmarks that may have been contaminated? The solution we explore is to apply machine unlearning techniques to remove benchmark-specific knowledge from contaminated models, thereby restoring the validity of benchmark-based evaluation without the need for costly retraining or new benchmark creation.
 This risk concern is not hypothetical: as discussed in the following sections, studies have empirically confirmed the presence of benchmark data in LLMs training corpora, motivating the decontamination approach explored in this thesis.
 
 \subsection{Data Leakage in Code LLMs}
-\citet{Sallou_2024} are among the first to systematically document this risk in the software engineering context, identifing three key threats to the validity of LLM-based software engineering experiments:  it is often unknown what data closed-source models were trained on, the boundary between training and evaluation data is frequently unclear, and results may not be reproducible across different model versions. They provide a striking illustration: ChatGPT-3.5, though not fine-tuned for bug-fixing tasks, exhibits precise knowledge of specific bugs in the Defects4J dataset — almost certainly because descriptions of those bugs appeared in its pretraining corpus. This means the model is effectively evaluated on data it has already seen, and its results may not generalize to code it has never encountered.
+\citet{Sallou_2024} are among the first to systematically document this risk in the software engineering context, identifing three key threats to the validity of LLM-based software engineering experiments:  it is often unknown what data closed-source models were trained on, the boundary between training and evaluation data is frequently unclear, and results may not be reproducible across different model versions. They provide a striking illustration: ChatGPT-3.5, though not fine-tuned for bug-fixing tasks, exhibits precise knowledge of specific bugs in the Defects4J dataset — almost certainly because descriptions of those bugs appeared in its pre-training corpus. This means the model is effectively evaluated on data it has already seen, and its results may not generalize to code it has never encountered.
 \par\vspace{1em}
-\citet{riddell2024quantifyingcontaminationevaluatingcode} perform a systematic study of overlap between popular code generation benchmarks and two large pretraining corpora (The Pile and The Stack). Using both surface-level string matching and semantic-level embedding similarity, they find substantial overlap: 12.2\% of HumanEval problems are present in The Pile, and 18.9\% in The Stack; for MBPP the figures are 6.9\% and 32.2\%, respectively. Critically, models perform significantly better on the contaminated subset of problems than on the non-contaminated subset, confirming that contamination inflates reported scores.  By analyzing the factors that modulate effects of contamination, emerged that larger models and shorter problems are more susceptible to memorization.
+\citet{riddell2024quantifyingcontaminationevaluatingcode} perform a systematic study of overlap between popular code generation benchmarks and two large pre-training corpora (The Pile and The Stack). Using both surface-level string matching and semantic-level embedding similarity, they find substantial overlap: 12.2\% of HumanEval problems are present in The Pile, and 18.9\% in The Stack; for MBPP the figures are 6.9\% and 32.2\%, respectively. Critically, models perform significantly better on the contaminated subset of problems than on the non-contaminated subset, confirming that contamination inflates reported scores.  By analyzing the factors that modulate effects of contamination, emerged that larger models and shorter problems are more susceptible to memorization.
 \par\vspace{1em}
 \citet{matton2024leakagecodegenerationevaluation} distinguish three contamination ways: (1) direct leakage, where benchmark problems, both in original or paraphrased forms, are directly present in training corpora (e.g. every HumanEval prompt appears at least 43 times in public GitHub repositories); (2) indirect leakage, where large-scale code synthesis pipelines produce training examples highly similar to benchmark problems,  through synthetic data; and (3) overfitting through checkpoint selection, where repeated evaluation on public benchmarks during development leads to selection bias towards model versions that perform well on leaked data. The authors introduce LBPP (Less Basic Python Problems), a benchmark of 161 carefully crafted problems designed to be free of contamination, and demonstrate that leading models achieve pass@1 scores up to 43% lower on LBPP than on HumanEval — a striking indication of the extent to which reported HumanEval performance reflects overfitting rather than true coding capability.
 \par\vspace{1em}
 \citet{zhou2025lessleakbenchinvestigationdataleakage} conduct the most comprehensive leakage audit to date, examining data leakage across 83 software engineering benchmarks (spanning: Python, Java, C, C++, and other languages). The methodology combines automatic detection (MinHash + Locality-Sensitive Hashing on n-gram representations of code) with manual verification by experienced developers to eliminate false positives. The study finds an average leakage ratio of 4.8\% across Python SE benchmarks, but with striking variation (e.g. SWE-Bench shows 8.7\% leakage). Notably, even benchmarks considered 'safe' such as HumanEval (1.8\%) and MBPP (0.4\%) show non-negligible overlap.
 \par\vspace{1em}
-Several methods have been proposed to detect whether a model has been trained on a given benchmark. \citet{shi2024detectingpretrainingdatalarge} propose a Min-K\% Prob method that exploits the observation that a model assigns higher minimum token probabilities to memorized text than to novel text. \citet{zawalski2025detectingdatacontaminationllms} show that a model's ability to complete partially revealed benchmark problems — using only a few in-context examples as cues — serves as evidence of prior exposure. \citet{stoehr2024localizingparagraphmemorizationlanguage} further show that memorization of multi-sentence passages can be traced to specific, localized regions of the model via activation analysis, providing mechanistic evidence for the viability of targeted unlearning.
+Several methods have been proposed to detect whether a model has been trained on a given benchmark. \citet{shi2024detectingpre-trainingdatalarge} propose a Min-K\% Prob method that exploits the observation that a model assigns higher minimum token probabilities to memorized text than to novel text. \citet{zawalski2025detectingdatacontaminationllms} show that a model's ability to complete partially revealed benchmark problems — using only a few in-context examples as cues — serves as evidence of prior exposure. \citet{stoehr2024localizingparagraphmemorizationlanguage} further show that memorization of multi-sentence passages can be traced to specific, localized regions of the model via activation analysis, providing mechanistic evidence for the viability of targeted unlearning.
 \par\vspace{1em}
 Despite these advances in detection, removal of detected contamination remains an open problem. Filtering training corpora is error-prone and incomplete; retraining is expensive; and alternative benchmark creation is a race that will eventually be lost as models train on ever-larger internet scrapes. These limitations suggest that preventing contamination at the source is not a viable long-term solution, motivating the use of post-hoc techniques — such as machine unlearning — to neutralize its effects directly in the model.
 
@@ -399,7 +399,7 @@ critically, it provides a clean experimental foundation: McEval-Hard is not part
 corpus as the model training was completed before the benchmark was available. 
 In particular, the original McEval benchmark was released in June 2024---after the training data cutoff of Qwen2.5-Coder, which is estimated
 at February 2024 (\citet{hui2024qwen25codertechnicalreport}). This means the model
-cannot have encountered this benchmark during pretraining, making it possible to
+cannot have encountered this benchmark during pre-training, making it possible to
 distinguish genuine contamination effects (introduced by us, in a controlled way) from
 pre-existing memorization. 
 Furthermore,  even if McEval-Hard is derived from McEval benchmark, the original McEval dataset also includes tasks in programming languages other than Python.
@@ -1299,7 +1299,7 @@ in Section~\ref{sec:memorization_analysis} uses them as the target for a more su
 neuron detection run, identifying only the neurons that are responsible for those specific tasks instead of the entire benchmark.
 Table~\ref{tab:masking_results} reports the effect of this subset-targeted masking across Z-score thresholds.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{Neuron masking results using neurons detected on the memorized task subset.}
 \label{tab:masking_results}
@@ -1337,13 +1337,13 @@ Table~\ref{tab:masking_results} reports the effect of this subset-targeted maski
 \end{table}
 
 The \textbf{Memorized Retained} column counts the number of purely memorized tasks that the masked model still solves after the intervention
---- higher the number less the intervention is successful at suppressing memorization, so a low number is desirable.
+--- higher the number less the intervention is successful at suppressing memorization, so a low number is desirable.\\
 The \textbf{Robust Retained} column counts the number of robust generalization tasks that the masked model still solves
---- higher the number more the intervention preserves general coding competence, so a high number is desirable.
+--- higher the number more the intervention preserves general coding competence, so a high number is desirable.\\
 The \textbf{PL-Only Recovered} column counts the number of capacity-starved tasks that the masked model recover after the intervention
---- higher the number more the intervention is able to restore general coding competence that was displaced by the contamination, so a high number is desirable.
-The \textbf{Total Accuracy} is the overall accuracy of the masked model on the benchmark, and
-\textbf{vs Original/Instruct} measures how many of the 56 tasks solved by the Original/Instruct model the masked variant can still solve.
+--- higher the number more the intervention is able to restore general coding competence that was displaced by the contamination, so a high number is desirable.\\
+The \textbf{Total Accuracy} is the overall accuracy of the masked model on the benchmark.\\
+The \textbf{vs Original/Instruct} measures how many of the 56 tasks solved by the Original/Instruct model the masked variant can still solve.
 \par\vspace{1em}
 At the aggressive threshold of Z=1, where 16,007 neurons are masked, the intervention is too broad causing significant collateral damage: 
 while only 2 out of 19 memorized tasks are still solved, robust generalization drops to 1
@@ -1387,7 +1387,6 @@ Masked --- (Z=10) & 11/19 (57.9\%) & 2/3 (66.7\%)  & 2/11 (18.2\%) & 34.63\% & 3
 \end{tabular}%
 }
 \end{table}
-
 The full-benchmark variants show a different situation compared to the subset-targeted ones.
 At Z=6, where 1,250 neurons are masked, 5 out of 19 memorized tasks still remain solved --- meaning 14
 have been suppressed, a stronger suppression --- but all 3 robust tasks are lost and no capacity-starved tasks are recovered,
@@ -1435,6 +1434,7 @@ memorization-specific and general-purpose neurons is the central challenge the i
   difficult even with a targeted detection approach.
 \end{itemize}
 \end{tcolorbox}
+
 \section{Robustness Evaluation}
 In Section~\ref{sec:robustness_design} we described the design of the cross-benchmark evaluation to test the robustness of the neuron masking intervention.
 There we made a core assumption: that the neurons identified as McEval-Hard-specific would not be encoding general Python coding competence that is also used to solve problems from unrelated benchmarks, and therefore masking them would not cause a significant drop in performance on those benchmarks.
@@ -1444,23 +1444,23 @@ report the full accuracy and TSED results on HumanEval+ and MBPP+ respectively,
 with Figures~\ref{fig:robustness_mbpp} and~\ref{fig:robustness_humaneval} providing
 the visual comparison across thresholds.
 
-\begin{table}[H]
+\begin{table}[h]
 \centering
 \caption{Accuracy and TSED on MBPP+ for baseline models and masked variants.}
 \label{tab:mbpp_robustness}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrr}
 \hline
-\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
+\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Neurons Masked} \\
 \hline
-Original/Instruct       & 53.33\% & 0.4299 & 378 & 0    \\
-PL-Only                 & 57.67\% & 0.4920 & 378 & 0    \\
-Leaked                  & 57.83\% & 0.4597 & 378 & 0    \\
-Masked (Z=6, TH=0.266)  & 56.30\% & 0.4759 & 378 & 1250 \\
-Masked (Z=7, TH=0.304)  & 55.82\% & 0.4690 & 378 & 919  \\
-Masked (Z=8, TH=0.343)  & 56.67\% & 0.4690 & 378 & 693  \\
-Masked (Z=9, TH=0.381)  & 56.35\% & 0.4639 & 378 & 536  \\
-Masked (Z=10, TH=0.420) & 56.72\% & 0.4652 & 378 & 409  \\
+Original/Instruct       & 53.33\% & 0.4299 & 0    \\
+PL-Only                 & 57.67\% & 0.4920 & 0    \\
+Leaked                  & 57.83\% & 0.4597 & 0    \\
+Masked (Z=6, TH=0.266)  & 56.30\% & 0.4759 & 1250 \\
+Masked (Z=7, TH=0.304)  & 55.82\% & 0.4690 & 919  \\
+Masked (Z=8, TH=0.343)  & 56.67\% & 0.4690 & 693  \\
+Masked (Z=9, TH=0.381)  & 56.35\% & 0.4639 & 536  \\
+Masked (Z=10, TH=0.420) & 56.72\% & 0.4652 & 409  \\
 \hline
 \end{tabular}%
 }
@@ -1492,18 +1492,18 @@ this benchmark.}
 \caption{Accuracy and TSED on HumanEval+ for baseline models and masked variants.}
 \label{tab:humaneval_robustness}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrr}
 \hline
-\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score} & \textbf{Samples} & \textbf{Neurons Masked} \\
+\textbf{Model} & \textbf{Accuracy (\%)} & \textbf{TSED Score}  & \textbf{Neurons Masked} \\
 \hline
-Original/Instruct       & 65.00\% & 0.5105 & 164 & 0    \\
-PL-Only                 & 65.37\% & 0.6102 & 164 & 0    \\
-Leaked                  & 64.63\% & 0.5683 & 164 & 0    \\
-Masked (Z=6, TH=0.266)  & 54.15\% & 0.5725 & 164 & 1250 \\
-Masked (Z=7, TH=0.304)  & 59.27\% & 0.5735 & 164 & 919  \\
-Masked (Z=8, TH=0.343)  & 60.24\% & 0.5685 & 164 & 693  \\
-Masked (Z=9, TH=0.381)  & 62.32\% & 0.5720 & 164 & 536  \\
-Masked (Z=10, TH=0.420) & 63.17\% & 0.5762 & 164 & 409  \\
+Original/Instruct       & 65.00\% & 0.5105 & 0    \\
+PL-Only                 & 65.37\% & 0.6102 & 0    \\
+Leaked                  & 64.63\% & 0.5683 & 0    \\
+Masked (Z=6, TH=0.266)  & 54.15\% & 0.5725 & 1250 \\
+Masked (Z=7, TH=0.304)  & 59.27\% & 0.5735 & 919  \\
+Masked (Z=8, TH=0.343)  & 60.24\% & 0.5685 & 693  \\
+Masked (Z=9, TH=0.381)  & 62.32\% & 0.5720 & 536  \\
+Masked (Z=10, TH=0.420) & 63.17\% & 0.5762 & 409  \\
 \hline
 \end{tabular}%
 }
@@ -1574,10 +1574,33 @@ As described in Section~\ref{sec:selected_llms}, the Qwen3.5-2B model plays a di
 from the other two models in this work.
 Instead of being used to run the full contamination and unlearning pipeline, it is used only
 for the cross-benchmark robustness evaluation.
-Differently from the cross-benchmark evaluation of the main model, here we are not aware of any leakage of the HumanEval-Plus and MBPP-Plus benchmarks into the training data of Qwen3.5-2B,
+Differently from the cross-benchmark evaluation of the main model, here we are not aware of any leakage of the HumanEval+ and MBPP+ benchmarks into the training data of Qwen3.5-2B,
 so we make the assumption that, whole or in part, the model has seen the benchmarks during training.
-For this model, HumanEval+ and MBPP+ have a dual role: they are both the target of contamination and the target of robustness evaluation,
-meaning that neurons are detected for each benchmark specifically and then the intervention is evaluated on both benchmarks. 
+This assumption gives both benchmarks a dual role in this evaluation.
+For each benchmark, we run the neuron detection pipeline to identify the benchmark-specific neurons,
+treating each benchmark as the target of contamination: we extract the activation patterns
+on the target benchmark, compare the results against the control dataset, compute the Z-scores, 
+and for each Z-score threshold we mask the identified neurons.
+The masked variants are then evaluated on both benchmarks, the target benchmark
+to check the same-benchmark effect of the intervention, and the other benchmark
+to check the cross-benchmark robustness.
+We end up with a total of four combinations: (1) masking HumanEval+ neurons and evaluating
+HumanEval+, (2) masking HumanEval+ neurons and evaluating MBPP+, (3) masking MBPP+ 
+neurons and evaluating MBPP+, and (4) masking MBPP+ neurons and evaluating HumanEval+.
+The same-benchmark evaluation checks whether the intervention is effective at 
+reducing the target benchmark's performance and the consequent TSED score, as it should be
+for a contaminated model.
+The cross-benchmark evaluation checks whether the intervention causes collateral damage on
+the other benchmark, reducing its performance on general coding competence, which should not happen if the neurons identified are specific to the target benchmark.
+This is the same logic of the robustness evaluation described for the main model, but it is applied on a model ``in the wild'' and between two benchmarks.
+Unlike the main model robustness evaluation, where the reange of Z-scores were in a range Z=6--10, here we explore a wider range of Z-scores, 
+from Z=1 to Z=9, up to the highest and lowest threshold at which neurons are detected.
+The reason for this wider range is that, instead of restricting the evaluation
+to the main model range, we want to observe how the model performs across the full
+range of thresholds, to check how much the intervention goes from being too aggressive to being more conservative.
+This wider range also allows us to check at which point the model's coding ability
+starts to be affected significantly, providing a more complete picture of the
+trade-off between contamination correction and collateral damage.
 \par\vspace{1em}
 Tables~\ref{tab:qwen35_humaneval_on_humaneval} through~\ref{tab:qwen35_humaneval_on_mbpp}
 report the four combinations of detection target and evaluation benchmark. 
@@ -1588,9 +1611,8 @@ The baselines for this section are the unmasked Qwen3.5-2B model's performance o
 to check whether the intervention reduce the target benchmark's performance while
 retaining general coding ability.
 \par\vspace{1em}
-For HumanEval+ (Table~\ref{tab:qwen35_humaneval_on_humaneval}), as also shown in 
-Figure~\ref{fig:robustness_humaneval_qwen35}, the results show a clear pattern similar
-to the one observed with Qwen2.5-Coder-1.5B, but with a more aggressive drop at low thresholds.
+For HumanEval+ (Table~\ref{tab:qwen35_humaneval_on_humaneval}), the results show a clear pattern similar
+to the one observed with Qwen2.5-Coder-1.5B, but with a more aggressive drop at lower thresholds.
 At Z=1--3, accuracy drops to between 19.51\% and 38.54\%, with an additional TSED score
 dropping significantly below the baseline.
 However, from Z=4--9, accuracy starts recovering until it reaches back the baseline accuracy at Z=8, with TSED scores stable around the baseline as well.
@@ -1620,15 +1642,15 @@ Masked (Z=9, TH=0.712)    & 44.51\% & 0.5553 & 164 & 334  \\
 }
 \end{table}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus.png}
-\caption{Accuracy on HumanEval+ for the baseline model and masked variants across
-Z-score thresholds (Z=1--9).}
-\label{fig:robustness_humaneval_qwen35}
-\end{figure}
+% \begin{figure}[h]
+% \centering
+% \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus.png}
+% \caption{Accuracy on HumanEval+ for the baseline model and masked variants across
+% Z-score thresholds (Z=1--9).}
+% \label{fig:robustness_humaneval_qwen35}
+% \end{figure}
   
-For MBPP-Plus (Table~\ref{tab:qwen35_mbpp_on_mbpp}), the pattern is similar but more extreme, as also shown in Figure~\ref{fig:robustness_mbpp_qwen35}.
+For MBPP+ (Table~\ref{tab:qwen35_mbpp_on_mbpp}), the pattern is similar but more extreme.
 At lower thresholds (Z=1 and Z=3), the drop is much more severe than on HumanEval+, with
 accuracy falling to 7.94\% at Z=1 and 7.88\% at Z=3, and TSED dropping to near zero.
 At Z=2, accuracy is higher at 20.85\%, but still significantly below the baseline, with TSED also dropping significantly.
@@ -1661,20 +1683,20 @@ Masked (Z=7, TH=0.944) & 46.14\% & 0.4157 & 378 & 102   \\
 }
 \end{table}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_plus.png}
-\caption{Accuracy on MBPP-Plus for the baseline model and masked variants across
-Z-score thresholds (Z=1--7).}
-\label{fig:robustness_mbpp_qwen35}
-\end{figure}
+% \begin{figure}[h]
+% \centering
+% \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_plus.png}
+% \caption{Accuracy on MBPP-Plus for the baseline model and masked variants across
+% Z-score thresholds (Z=1--7).}
+% \label{fig:robustness_mbpp_qwen35}
+% \end{figure}
 
 \par\vspace{1em}
 \textbf{Cross-benchmark masking.}
 The second question is how the intervention behaves when one benchmark is evaluated after masking neurons specific to the other.
 \par\vspace{1em}
 When masking MBPP+ specific neurons and evaluating HumanEval+ (Table~\ref{tab:qwen35_mbpp_on_humaneval}), 
-the full range of thresholds, as shown in Figure~\ref{fig:qwe3.5_mbpp_on_humaneval}, shows a pattern where the accuracy drops compared to the baseline as the Z-score decreases. 
+the full range of thresholds shows a pattern where the accuracy drops compared to the baseline as the Z-score decreases. 
 At Z=1, where 14719 neurons are masked, the accuracy drops dramatically to 5.61\%, with a significant drop in TSED as well, 
 indicating that the intervention is too aggressive and causes significant collateral damage.
 At Z=2 (7233 neurons masked) and Z=3 (3911 neurons masked), the accuracy is still very low at 13.66\% and 25.00\% respectively, 
@@ -1708,14 +1730,14 @@ Masked (Z=7, TH=0.944)    & 43.78\% & 0.5471 & 164 & 102  \\
 }
 \end{table}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus_masking_mbpp.png}
-\caption{Accuracy on HumanEval+ for the baseline model and masked variants across Z-score thresholds (Z=1--7) when masking MBPP+ specific neurons.}
-\label{fig:qwe3.5_mbpp_on_humaneval}
-\end{figure}
+% \begin{figure}[h]
+% \centering
+% \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_humaneval_plus_masking_mbpp.png}
+% \caption{Accuracy on HumanEval+ for the baseline model and masked variants across Z-score thresholds (Z=1--7) when masking MBPP+ specific neurons.}
+% \label{fig:qwe3.5_mbpp_on_humaneval}
+% \end{figure}
 The other direction, when masking HumanEval+ specific neurons and evaluating MBPP+ (Table~\ref{tab:qwen35_humaneval_on_mbpp}), 
-as also shown in Figure~\ref{fig:qwe3.5_humaneval_on_mbpp}, the accuracy drops much more dramatically at low thresholds, with 3.92\% at Z=1, 0.95\% at Z=2, and 1.48\% at Z=3, compared to the baseline of 48.52\%.
+the accuracy drops much more dramatically at low thresholds, with 3.92\% at Z=1, 0.95\% at Z=2, and 1.48\% at Z=3, compared to the baseline of 48.52\%.
 These results confirms again that at low thresholds the intervention is too aggressive, causing a significant collateral damage so significant
 that the model can barely solve any problem from MBPP+, reducing almost to zero the coding competence on this benchmark.
 However, from Z=4--7, the accuracy recovers to a range of 42.49\%--46.30\%, almost in line
@@ -1746,16 +1768,16 @@ Masked (Z=9, TH=0.712)    & 46.24\% & 0.4179 & 378 & 334  \\
 }
 \end{table}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_masking_humaneval.png}
-\caption{Accuracy on MBPP+ for the baseline model and masked variants across Z-score thresholds (Z=1--9) when masking HumanEval+ specific neurons.}
-\label{fig:qwe3.5_humaneval_on_mbpp}
-\end{figure}
+% \begin{figure}[H]
+% \centering
+% \includegraphics[width=\linewidth]{img/Qwen3.5_accuracy_comparison_mbpp_masking_humaneval.png}
+% \caption{Accuracy on MBPP+ for the baseline model and masked variants across Z-score thresholds (Z=1--9) when masking HumanEval+ specific neurons.}
+% \label{fig:qwe3.5_humaneval_on_mbpp}
+% \end{figure}
 
 From these results, we can affirm that for this model, the cross-benchmark robustness of the intervention is more sensitive
 to the Z-score threshold than what was observed with Qwen2.5-Coder-1.5B, with significant drops in performance on the unrelated benchmark at low thresholds, and a recovery to near-baseline performance at higher thresholds.
-The factor comntributing to this difference are not fully clear, but there are some hypotheses that can be made based on the available results and the known differences between the two models.
+The factor contributing to this difference are not fully clear, but there are some hypotheses that can be made based on the available results and the known differences between the two models.
 \begin{enumerate}
 	\item[(1)] As mentioned at the beginning of this section, we are not aware of any leakage of the HumanEval+ and MBPP+ benchmarks into the training data of Qwen3.5-2B. It is possible that the model has seen the whole or part of the benchmarks during training, or that has been exposed to previous versions as Humaneval and MBPP.
 	However, it is also possible that the model has not been exposed to the benchmarks.
@@ -1818,7 +1840,7 @@ At Z=7, with only 50 neurons shared, the drop in accuracy is minimal: Humaneval+
 The more the Z-score threshold increases, the more the intervention becomes more specific to the target benchmark and less aggressive.
 \par\vspace{1em}
 Also the TSED scores, hide some interesting insights about the nature of the neurons being masked at different thresholds.
-In the cross-benchmark tables, the TSED scores drop significantly at low thresholds, 
+In the cross-benchmark tables (Tables~\ref{tab:qwen35_mbpp_on_humaneval} and ~\ref{tab:qwen35_humaneval_on_mbpp}), the TSED scores drop significantly at low thresholds, 
 independently from the evaluation benchmark, and recover at higher thresholds.
 For example, when masking MBPP+ specific neurons and evaluating HumanEval+, the TSED score
 at Z=1 drop from the baseline of 0.5488 to 0.3017, and when masking the HumanEval+ and evaluating MBPP+, the TSED score 
@@ -1839,8 +1861,18 @@ also masked, and therefore the drop in HumanEval+ accuracy is minimal.
 When instead the 713 Humaneval+ specific neurons are masked, these 50 neurons represent
 almost half of the MBPP+ specific neurons, which is why the drop in MBPP+ accuracy is more significant than the drop in HumanEval+ accuracy when masking the other benchmark's specific neurons.
 \par\vspace{1em}
-In summary, the significant overlap between the neurons identified as specific to HumanEval+ and those identified as specific to MBPP+ at low Z-score thresholds explains the significant drop in performance on the unrelated benchmark when masking at low thresholds, while the decreasing overlap at higher thresholds explains the recovery in performance on the unrelated benchmark as the intervention becomes more specific to the target benchmark.
-The TSED scores also follow this pattern, with significant drops at low thresholds due to the masking of shared neurons affecting the structural style of generated outputs, and recovery at higher thresholds as the intervention becomes more specific to the target benchmark.
+From these analysis, it is worth reflecting on the nature of this overlap and what
+it reveals about the model's internal representations of coding competence.\\
+(1) At low Z-score thresholds, the sets of the detected neurons are large enough to include also neurons that are not strictly specific to the target benchmark, instead they encode more Python-specific knowledge.
+Since both benchmarks are Python coding benchmarks, it is not surprising that they share a significant portion of neurons that encode general Python coding competence, which are detected as specific to both benchmarks at low thresholds.
+This would also explain why the performances of the model drop at these low thresholds.\\
+(2) Additionally to the programming language of both benchmarks, they also
+share a similar algorithmic problem types, such as string manipulation, list operations, and basic data structures.
+It is possible that the shared neurons at low thresholds are encoding knowledge related to these shared problem types, which would also explain the significant drop in performance on the unrelated benchmark when masking at low thresholds.
+As the Z-score threshold increases, the neurons that are shared between the two benchmarks are less, and the neurons that are specific to each benchmark are more, which would explain the recovery in performance on the unrelated benchmark as the intervention becomes more specific to the target benchmark.
+\par\vspace{1em}
+In summary, the significant overlap between the neurons identified as specific to HumanEval+ and specific to MBPP+ at low Z-score thresholds explains the significant drop in performance on the unrelated benchmark, while the decreasing overlap at higher thresholds explains the recovery in performance on the unrelated benchmark as more specific intervention to the target benchmark.
+The TSED scores follow this pattern, with significant drops at low thresholds due to the masking of shared neurons affecting the structural style of generated outputs, and recovery at higher thresholds as the intervention becomes more specific to the target benchmark.
 
 \subsection{Solution Divergence Across Masking Strategies}
 The neuron overlap analysis explains the cross-benchmark performance patterns.
@@ -1870,10 +1902,10 @@ HumanEval+ & 0.8419 & 26/164 (15.9\%) &  86/164 (52.4\%) & 2/164 (1.2\%)   \\
 \hline
 \end{tabular}
 \end{table}
-\begin{figure}[H]
+\begin{figure}[h]
     \centering
     \includegraphics[width=0.8\linewidth]{img/radial_mbpp_plus.png}
-    \caption{Solution distance radial plot for MBPP-Plus (n=378 tasks).}
+    \caption{Solution distance radial plot for MBPP+ (n=378 tasks).}
     \label{fig:radial_mbpp}
 \end{figure}
 By looking at the table, we can see that the average similarity between the solutions generated by the two interventions is relatively high for both benchmarks, with an average similarity of 0.7591 for MBPP+ and 0.8419 for HumanEval+.
@@ -1892,16 +1924,15 @@ points farther from the center are more different.
 The connecting line between the two points encodes the similarity between the two solutions:
 green lines indicates high similarity, purple lines indicates moderate similarity, and red lines indicates low similarity.
 
-\begin{figure}[H]
+\begin{figure}[h]
     \centering
     \includegraphics[width=0.8\linewidth]{img/radial_humaneval_plus.png}
-    \caption{Solution distance radial plot for HumanEval-Plus (n=164 tasks). Same encoding
+    \caption{Solution distance radial plot for HumanEval+ (n=164 tasks). Same encoding
     as Figure~\ref{fig:radial_mbpp}. The denser cluster near the canonical center and the
     predominance of teal and purple lines reflect the higher cross-strategy agreement on
-    this benchmark (avg similarity 0.8759 vs 0.7953 for MBPP-Plus).}
+    this benchmark (avg similarity 0.8759 vs 0.7953 for MBPP+).}
     \label{fig:radial_he}
 \end{figure}
-
 Both table and figures show that, the majority of generated solutions are close to the
 canonical solution, with lines mostly green and purple, indicating that the solutions
 are similar to the canonical solution.
@@ -1910,7 +1941,8 @@ indicating that the solutions are more different from the canonical solution and
 different between the two masking strategies.
 The solutions near the canonical center, instead, are connected by short green or purple lines,
 indicating that the solutions are similar to the canonical solution and similar between the two masking strategies.
-\par\vspace{1em}
+% \par\vspace{1em}
+\newpage
 \textbf{Converging tasks. }
  The tasks where both masking strategies generate similar solutions, are interesting since they are consistent
 with the simples problems in each benchmark.
@@ -1928,6 +1960,7 @@ On MBPP+, tasks such as the one shown in Figure~\ref{fig:converging_task}, are a
 \label{fig:converging_task}
 \end{figure}
 The same happens for HumanEval+, where simple tasks such as the one shown in Figure~\ref{fig:converging_task_he}, 
+are all identically solved by both masking strategies.
 \begin{figure}[H]
 \begin{lstlisting}[style=pythonstyle2]
     # Task 60: sum_to_n is a function that sums numbers from 1 to n.
@@ -1938,6 +1971,7 @@ The same happens for HumanEval+, where simple tasks such as the one shown in Fig
 \caption{Examples of converging tasks in HumanEval+. The solutions generated by both masking strategies.}
 \label{fig:converging_task_he}
 \end{figure}
+
 These results are consistent with the qualitative analysis of the solutions,
 where problems with simple solutions, regardless of the masking strategy, are solved in a similar way.
 \par\vspace{1em}
@@ -1948,7 +1982,7 @@ On MBPP+, the task shown in Figure~\ref{fig:diverging_task} is solved by the two
 strategies in a different way.
 The Humaneval+ masked solution is a plausible solution but with an incorrect approach, while 
 the MBPP+ masked solution hallucinates reassigning the same variable over and over again.
-\begin{figure}[H]
+\begin{figure}[h]
 \begin{lstlisting}[style=pythonstyle2]
     # Task 131: Write a python function to reverse only the vowels of a given string (where y is not a vowel).
 
@@ -2062,12 +2096,29 @@ The bridge between controlled contamination and real-world leakage is an importa
 
 \section{McEval-Hard as the Only Contamination Target}
 The entire pipeline for detecting and unlearning contamination was designed, validated, and tuned on the single benchmark of McEval-Hard.
-The reason for this choice was motivated in Section~\ref{sec:benchmarks}: McEval-Hard lets us simulate a clean contamination scenario where the benchmark is explicitly included in training without any pretraining overlap, providing a clear experimental target for validating the approach.
+The reason for this choice was motivated in Section~\ref{sec:benchmarks}: McEval-Hard lets us simulate a clean contamination scenario where the benchmark is explicitly included in training without any pre-training overlap, providing a clear experimental target for validating the approach.
 \par\vspace{1em}
 It is not clear how well these choices transfer to benchmarks with different properties.
 From a benchmark to another, the nature of the problems, the structure of their solutions, the length, the difficulty, and the domain can vary significantly.
 These differences may change how strongly a model memorizes the benchmark and how intensely that memorization manifests in neuron activation patterns, which in turn may affect how well the neuron detection and masking approach can identify and suppress it without harming general coding competence.
 Therefore, since the pipeline was never tested on a second contamination target, it is not possible to tell how the approach would perform on a different benchmark.
+
+\section{Python-Centric Evaluation}
+A further limitation of this work is the Python-centric nature of the evaluation.
+Even if originally the McEval benchmark is a multi-language benchmark, the one used in this work is a Python-only
+version.
+Similarly, even if not originally multilingual, HumanEval+ and MBPP+ are also Python-only benchmarks.
+The consequence of this choice is that the neuron detection pipeline was always run 
+comparing benchmark-specific Python problems against a control dataset of general Python code.
+Same for the masking intervention, which was always applied to neurons identified as specific to Python benchmark problems.
+\par\vspace{1em}
+Therefore, the neuron detection and masking approach was never tested on a different programming language, 
+that may differ in syntax, structure, and style from Python.
+It is possible that the approach would perform differently on a different programming language, especially if the models have different levels of proficiency in that language, or if the benchmark problems in that language have different characteristics that affect how they are memorized.
+The Python-centric evaluation is a limitation that should be addressed
+Additionally, the fact that the same neuron may activate for different programming languages, may also affect the specificity of the identified neurons and the effectiveness of the masking intervention in a multilingual setting.
+\par\vspace{1em}
+Testing the approach on a different programming language, or on a multilingual benchmark, would be an important step to validate the generality of the findings and to understand how the approach performs in different linguistic contexts.
 
 
 \chapter{Conclusions}
@@ -2102,11 +2153,11 @@ But now it is a better informed question, with a clearer understanding of the ch
 
 
 
-\appendix %optional, use only if you have an appendix
+% \appendix %optional, use only if you have an appendix
 
 \backmatter
 
-\chapter{Glossary} %optional
+% \chapter{Glossary} %optional
 
 %\bibliographystyle{alpha}
 %\bibliographystyle{dcu}
